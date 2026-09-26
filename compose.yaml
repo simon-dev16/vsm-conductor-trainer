@@ -1,0 +1,28 @@
+services:
+  database:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: vsm
+      POSTGRES_USER: vsm
+      POSTGRES_PASSWORD: ${VSM_DB_PASSWORD:?Set VSM_DB_PASSWORD}
+    volumes:
+      - vsm_database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U vsm -d vsm"]
+      interval: 5s
+      retries: 10
+  backend:
+    build:
+      context: .
+      dockerfile: Backend/Dockerfile
+    env_file:
+      - Backend/.env
+    environment:
+      VSM_SHIFT_DATABASE: postgresql://vsm:${VSM_DB_PASSWORD:?Set VSM_DB_PASSWORD}@database:5432/vsm
+    ports:
+      - "127.0.0.1:18767:18767"
+    depends_on:
+      database:
+        condition: service_healthy
+volumes:
+  vsm_database:
