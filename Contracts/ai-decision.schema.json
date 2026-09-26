@@ -1,0 +1,24 @@
+{
+  "type":"object","additionalProperties":false,
+  "required":["status","actorId","text","deadlineSeconds","state","commands","assessments","debrief"],
+  "properties":{
+    "status":{"type":"string","enum":["active","completed","failed"]},
+    "actorId":{"type":"string"},
+    "text":{"type":"string","maxLength":8000},
+    "deadlineSeconds":{"type":"integer","minimum":0,"maximum":300},
+    "state":{"type":"object","additionalProperties":false,"required":["safety","loyalty","competencies"],"properties":{
+      "safety":{"type":"number","minimum":0,"maximum":100},
+      "loyalty":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":100}},
+      "competencies":{"type":"object","additionalProperties":{"type":"number","minimum":0,"maximum":100}}
+    }},
+    "commands":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"required":["actorId","type","value","targetActorId"],"properties":{
+      "actorId":{"type":"string"},"type":{"type":"string","enum":["speak","set_emotion","set_task_marker","look_at","move_to","play_animation","use_object"]},
+      "value":{"type":"string","maxLength":8000},"targetActorId":{"type":"string"}
+    }}},
+    "assessments":{"type":"array","maxItems":3,"items":{"type":"object","additionalProperties":false,"required":["metricId","score","reason","evidence"],"properties":{
+      "metricId":{"type":"string","enum":["decision_making","response_speed","customer_care"]},
+      "score":{"type":"number","minimum":0,"maximum":100},"reason":{"type":"string","minLength":1,"maxLength":4000},"evidence":{"type":"string","minLength":1,"maxLength":4000}
+    }}},
+    "debrief":{"type":"string","maxLength":8000}
+  }
+}
