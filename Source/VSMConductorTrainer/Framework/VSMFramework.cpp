@@ -56,6 +56,8 @@ void UVSMWidget::WriteInput(FName WidgetName,const FString& Text)
 void UVSMWidget::MoveInput(FVector2D Axis){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->SetVirtualMovement(Axis);}
 void UVSMWidget::ViewInput(FVector2D Axis){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->AddViewInput(Axis);}
 void UVSMWidget::ToggleCamera(){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->TogglePerspective();}
+void UVSMWidget::Navigate(EVSMUIScreen NewScreen){if(auto* PC=GetConductorController())PC->Navigate(NewScreen);}
+void UVSMWidget::StartScenario(int32 SituationId,bool bRanked){if(auto* Shift=GetShift())Shift->StartShift(bRanked,SituationId);}
 FReply UVSMWidget::NativeOnTouchStarted(const FGeometry& G,const FPointerEvent& E)
 {
     auto* PC=GetConductorController();if(!PC||PC->GetScreen()!=EVSMUIScreen::Gameplay)return FReply::Unhandled();

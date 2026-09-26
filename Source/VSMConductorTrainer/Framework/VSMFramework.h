@@ -34,6 +34,8 @@ public:
     UFUNCTION(BlueprintPure, Category="VSM") UVSMShiftSubsystem* GetShift() const;
     UFUNCTION(BlueprintPure, Category="VSM|UI") FString ReadInput(FName WidgetName) const;
     UFUNCTION(BlueprintCallable, Category="VSM|UI") void WriteInput(FName WidgetName,const FString& Text);
+    UFUNCTION(BlueprintCallable, Category="VSM|UI") void Navigate(EVSMUIScreen NewScreen);
+    UFUNCTION(BlueprintCallable, Category="VSM|Shift") void StartScenario(int32 SituationId,bool bRanked=false);
     UFUNCTION(BlueprintCallable, Category="VSM|UI") void RefreshBindings();
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void MoveInput(FVector2D Axis);
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void ViewInput(FVector2D Axis);

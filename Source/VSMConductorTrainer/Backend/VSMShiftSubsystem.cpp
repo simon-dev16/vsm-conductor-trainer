@@ -246,6 +246,7 @@ FString UVSMShiftSubsystem::Field(const FString& Path) const
         return Result;
     }
     if(Path==TEXT("report"))return ReportText();
+    if(Path.StartsWith(TEXT("document:")))return DocumentsText(Path.RightChop(9));
     if(Path==TEXT("gauges"))return FString::Printf(TEXT("Безопасность %s / 100\nЛояльность %s / 100"),*Field(TEXT("safety")),*Field(TEXT("loyalty")));
     if(Path==TEXT("leaderboard"))
     {FString Result;const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;if(Leaderboard&&Leaderboard->TryGetArrayField(TEXT("items"),Rows))for(auto& R:*Rows){auto O=R->AsObject();Result+=FString::Printf(TEXT("%.0f. %s — %.0f%s\n"),O->GetNumberField(TEXT("rank")),*O->GetStringField(TEXT("name")),O->GetNumberField(TEXT("rating")),O->GetBoolField(TEXT("is_self"))?TEXT(" ← вы"):TEXT(""));}return Result;}
