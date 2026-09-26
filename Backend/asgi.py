@@ -48,7 +48,10 @@ def user(request):return store.authenticate(request.headers.get('authorization',
 
 
 @app.get('/health')
-def health():return {'status':'ok','apiVersion':2,'database':'postgresql' if store.postgres else 'sqlite'}
+def health():
+    provider=store.engine.provider
+    return {'status':'ok','apiVersion':2,'database':'postgresql' if store.postgres else 'sqlite',
+            'aiConfigured':all(getattr(provider,k,'') for k in ('key','folder','model'))}
 
 
 @app.post('/v2/auth/register',status_code=201)
