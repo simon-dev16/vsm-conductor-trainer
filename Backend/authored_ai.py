@@ -3,7 +3,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from ai_provider import ProviderError
+from ai_provider import ProviderError, http_failure
 
 
 CLASSIFICATION_SCHEMA = {
@@ -70,7 +70,8 @@ class AuthoredYandexProvider:
         except urllib.error.HTTPError as exc:
             status = exc.code
             exc.close()
-            raise ProviderError('ai_http_error', f'Модель вернула HTTP {status}.') from None
+            code,message = http_failure(status,'ai','Модель')
+            raise ProviderError(code,message) from None
         except (urllib.error.URLError, TimeoutError):
             raise ProviderError('ai_unavailable', 'Модель недоступна. Можно повторить запрос.') from None
         except (ValueError, KeyError, IndexError, TypeError):
