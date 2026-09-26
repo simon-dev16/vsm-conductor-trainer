@@ -140,8 +140,8 @@ class Handler(BaseHTTPRequestHandler):
     do_POST=dispatch
 
 
-def make_server(service,port=18767):
-    server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+def make_server(service,port=18767,host=None):
+    server=ThreadingHTTPServer((host or os.getenv('VSM_BIND','127.0.0.1'),port),Handler)
     server.service=service
     server.shift_store=ShiftStore(os.getenv('VSM_SHIFT_DATABASE',service.path+'.shifts'))
     server.rate_lock=threading.Lock()
@@ -160,5 +160,8 @@ if __name__=='__main__':
     if os.getenv('VSM_DEMO_PASSWORD'):
         service.create_demo_user(os.environ['VSM_DEMO_PASSWORD'])
     server=make_server(service,int(os.getenv('VSM_PORT','18767')))
-    logging.info('VSM backend: http://127.0.0.1:%d. No provider calls until a run is requested.',server.server_address[1])
+    bound=server.server_address
+    logging.info('VSM backend: http://%s:%d. No provider calls until a run is requested.',*bound)
+    if bound[0]=='127.0.0.1':
+        logging.info('Слушаю только локальный адрес. Для телефона поставь VSM_BIND=0.0.0.0 в Backend/.env.')
     server.serve_forever()
