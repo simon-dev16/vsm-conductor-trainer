@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "duration_seconds": 420,
+  "max_active_tasks": 3,
+  "max_active_critical_tasks": 1,
+  "task_spawn_interval_seconds": 45,
+  "daily_ranked_attempts": 10,
+  "day_timezone": "Europe/Moscow",
+  "initial_safety": 100,
+  "initial_loyalty": 80,
+  "failure_below_safety": 20,
+  "failure_below_loyalty": 20,
+  "ticket_check_seconds": 90,
+  "inventory_slots": 8,
+  "weights": {
+    "сервисная": {"task": 1.0, "speed": 0.7, "timeout_safety_loss": 0, "timeout_loyalty_loss": 5},
+    "приоритетная": {"task": 1.5, "speed": 1.0, "timeout_safety_loss": 10, "timeout_loyalty_loss": 8},
+    "критическая": {"task": 2.0, "speed": 1.5, "timeout_safety_loss": 25, "timeout_loyalty_loss": 10}
+  },
+  "response_bands": [
+    {"max_fraction": 0.25, "score": 100},
+    {"max_fraction": 0.5, "score": 80},
+    {"max_fraction": 0.75, "score": 60},
+    {"max_fraction": 1.0, "score": 40}
+  ],
+  "score_scale": [0, 25, 50, 75, 100],
+  "xp_per_completed_shift": 100,
+  "xp_per_level": 500,
+  "achievements": [
+    {"id": "first_shift", "title": "Первая смена", "completed_shifts": 1},
+    {"id": "five_shifts", "title": "Опытный проводник", "completed_shifts": 5},
+    {"id": "safe_shift", "title": "Безопасная смена", "minimum_final_safety": 100},
+    {"id": "clear_communication", "title": "Понятное общение", "minimum_communication": 90}
+  ]
+}

@@ -1,0 +1,726 @@
+{
+  "schema_version": "1.0",
+  "source_file": "situations.json",
+  "scope": {
+    "included_situation_ids": [
+      8,
+      9,
+      10,
+      15,
+      17,
+      28,
+      43,
+      44,
+      46
+    ],
+    "note": "Включена только часть ситуаций, в которых исходный JSON содержит явные условия, альтернативы или последовательности действий, пригодные для ветвления."
+  },
+  "llm_rules": [
+    "ИИ работает только в пределах текущего situation_id и current_state.",
+    "ИИ классифицирует смысл действия или реплики игрока и выбирает только один transition_id из allowed_transitions текущего состояния.",
+    "ИИ не создает новые ветки, факты, причины, правила, обязанности, условия или последствия.",
+    "Поля game_state_condition проверяет игровой код. ИИ не должен угадывать наличие мест, способ оплаты, наличие лимона, позицию пассажира относительно хода движения и другие факты игрового состояния.",
+    "Если действие игрока не соответствует ни одному allowed_transitions, ИИ возвращает transition_id = \"NO_MATCH\" и состояние не меняется.",
+    "Состояния с source_gap = true означают, что исходный situations.json не определяет дальнейшее действие. ИИ не должен продолжать такую ветку самостоятельно.",
+    "Текст игрока сопоставляется по смыслу, а не по дословному совпадению формулировок."
+  ],
+  "llm_response_format": {
+    "situation_id": "integer",
+    "current_state": "string",
+    "transition_id": "string"
+  },
+  "scenarios": [
+    {
+      "situation_id": 8,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажир желает повысить класс обслуживания",
+      "entry_state": "request_received",
+      "states": {
+        "request_received": {
+          "allowed_transitions": [
+            {
+              "id": "check_upgrade_availability",
+              "match_player_meaning": "Игрок проверяет наличие мест и возможность оформления доплаты через утвержденный канал (мобильную кассу).",
+              "next_state": "availability_check"
+            },
+            {
+              "id": "ask_to_remain_in_current_seat",
+              "match_player_meaning": "Игрок просит пассажира до оформления оставаться на месте, указанном в билете.",
+              "next_state": "request_received"
+            }
+          ]
+        },
+        "availability_check": {
+          "engine_branches": [
+            {
+              "id": "seat_available",
+              "game_state_condition": "Свободное место для повышения класса есть.",
+              "next_state": "payment_details"
+            },
+            {
+              "id": "seat_not_available",
+              "game_state_condition": "Свободного места для повышения класса нет.",
+              "next_state": "source_gap_no_available_seat"
+            }
+          ]
+        },
+        "payment_details": {
+          "allowed_transitions": [
+            {
+              "id": "clarify_surcharge_and_payment",
+              "match_player_meaning": "Игрок уточняет стоимость доплаты и вид оплаты.",
+              "next_state": "payment_method"
+            }
+          ]
+        },
+        "payment_method": {
+          "engine_branches": [
+            {
+              "id": "cash_payment",
+              "game_state_condition": "Пассажир оплачивает наличными.",
+              "next_state": "cash_payment_handling"
+            },
+            {
+              "id": "non_cash_payment",
+              "game_state_condition": "Выбран иной допустимый вид оплаты.",
+              "next_state": "upgrade_processing"
+            }
+          ]
+        },
+        "cash_payment_handling": {
+          "allowed_transitions": [
+            {
+              "id": "provide_change_if_needed",
+              "match_player_meaning": "Игрок учитывает необходимость предоставить сдачу при оплате наличными.",
+              "next_state": "upgrade_processing"
+            }
+          ]
+        },
+        "upgrade_processing": {
+          "terminal": true,
+          "result": "Повышение класса оформляется через утвержденный канал (мобильную кассу)."
+        },
+        "source_gap_no_available_seat": {
+          "terminal": true,
+          "source_gap": true,
+          "result": "В situations.json дальнейшее действие при отсутствии свободных мест не описано."
+        }
+      }
+    },
+    {
+      "situation_id": 9,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажир хочет пересесть",
+      "entry_state": "move_request_received",
+      "states": {
+        "move_request_received": {
+          "allowed_transitions": [
+            {
+              "id": "ask_move_reason",
+              "match_player_meaning": "Игрок уточняет причину пересадки.",
+              "next_state": "reason_identified"
+            }
+          ]
+        },
+        "reason_identified": {
+          "engine_branches": [
+            {
+              "id": "seat_equipment_issue",
+              "game_state_condition": "Причина связана с креслом, окном, столиком или иным состоянием места.",
+              "next_state": "check_same_class_seat"
+            },
+            {
+              "id": "nearby_passenger_behavior",
+              "game_state_condition": "Причина связана с поведением пассажиров рядом.",
+              "next_state": "assess_nearby_passengers"
+            },
+            {
+              "id": "conflict",
+              "game_state_condition": "Выявлена конфликтная ситуация.",
+              "next_state": "conflict_flow"
+            },
+            {
+              "id": "health_threat",
+              "game_state_condition": "Выявлена угроза здоровью.",
+              "next_state": "health_threat_flow"
+            },
+            {
+              "id": "upgrade_required",
+              "game_state_condition": "Пересадка предполагает повышение класса.",
+              "next_state": "upgrade_flow"
+            }
+          ]
+        },
+        "check_same_class_seat": {
+          "engine_branches": [
+            {
+              "id": "same_class_seat_available",
+              "game_state_condition": "В том же классе есть свободное место.",
+              "next_state": "same_class_move"
+            },
+            {
+              "id": "same_class_seat_not_available",
+              "game_state_condition": "В том же классе нет свободного места.",
+              "next_state": "source_gap_no_same_class_seat"
+            }
+          ]
+        },
+        "same_class_move": {
+          "terminal": true,
+          "result": "Пересадка рассматривается на свободное место в том же классе."
+        },
+        "assess_nearby_passengers": {
+          "allowed_transitions": [
+            {
+              "id": "clarify_nearby_behavior",
+              "match_player_meaning": "Игрок выясняет, как ведут себя пассажиры рядом.",
+              "next_state": "nearby_behavior_result"
+            }
+          ]
+        },
+        "nearby_behavior_result": {
+          "engine_branches": [
+            {
+              "id": "conflict_confirmed",
+              "game_state_condition": "По результату уточнения выявлен конфликт.",
+              "next_state": "conflict_flow"
+            },
+            {
+              "id": "no_conflict_confirmed",
+              "game_state_condition": "Конфликт не выявлен.",
+              "next_state": "source_gap_nearby_behavior_no_conflict"
+            }
+          ]
+        },
+        "conflict_flow": {
+          "allowed_transitions": [
+            {
+              "id": "collect_feedback_from_all",
+              "match_player_meaning": "Игрок получает обратную связь от всех участников конфликта.",
+              "next_state": "involve_train_manager"
+            }
+          ]
+        },
+        "involve_train_manager": {
+          "allowed_transitions": [
+            {
+              "id": "call_train_manager",
+              "match_player_meaning": "Игрок привлекает начальника поезда.",
+              "next_state": "conflict_handled"
+            }
+          ]
+        },
+        "conflict_handled": {
+          "terminal": true,
+          "result": "Для конфликтной ситуации получена обратная связь от участников и привлечен начальник поезда."
+        },
+        "health_threat_flow": {
+          "allowed_transitions": [
+            {
+              "id": "call_train_manager_for_health_threat",
+              "match_player_meaning": "Игрок привлекает начальника поезда при угрозе здоровью.",
+              "next_state": "health_threat_escalated"
+            }
+          ]
+        },
+        "health_threat_escalated": {
+          "terminal": true,
+          "result": "При угрозе здоровью привлечен начальник поезда."
+        },
+        "upgrade_flow": {
+          "allowed_transitions": [
+            {
+              "id": "process_surcharge",
+              "match_player_meaning": "Игрок допускает повышение класса только с оформлением доплаты.",
+              "next_state": "upgrade_handled"
+            }
+          ]
+        },
+        "upgrade_handled": {
+          "terminal": true,
+          "result": "Повышение класса допускается только с оформлением доплаты."
+        },
+        "source_gap_no_same_class_seat": {
+          "terminal": true,
+          "source_gap": true,
+          "result": "В situations.json дальнейшее действие при отсутствии свободного места в том же классе не описано."
+        },
+        "source_gap_nearby_behavior_no_conflict": {
+          "terminal": true,
+          "source_gap": true,
+          "result": "В situations.json отдельное дальнейшее действие для случая без конфликта после оценки поведения соседних пассажиров не описано."
+        }
+      }
+    },
+    {
+      "situation_id": 10,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажиру мешают проезжающие рядом дети",
+      "entry_state": "complaint_received",
+      "states": {
+        "complaint_received": {
+          "allowed_transitions": [
+            {
+              "id": "respond_without_blame",
+              "match_player_meaning": "Игрок реагирует без обвинения детей или родителей и старается помочь.",
+              "next_state": "resolution_options"
+            }
+          ]
+        },
+        "resolution_options": {
+          "allowed_transitions": [
+            {
+              "id": "offer_alternative_seat",
+              "match_player_meaning": "Игрок предлагает пассажиру альтернативное место при наличии.",
+              "guard": "Альтернативное место есть.",
+              "next_state": "alternative_seat_offered"
+            },
+            {
+              "id": "speak_with_parents",
+              "match_player_meaning": "Игрок вежливо обращается к сопровождающим или родителям, не провоцируя конфликт.",
+              "next_state": "parents_addressed"
+            },
+            {
+              "id": "offer_private_discussion",
+              "match_player_meaning": "Игрок предлагает обсудить вопрос так, чтобы не смущать других пассажиров, в том числе в тамбуре.",
+              "next_state": "private_discussion"
+            },
+            {
+              "id": "offer_children_materials",
+              "match_player_meaning": "Игрок предлагает детям детские журналы, детские наборы или сообщает родителям о развлечениях на борту.",
+              "next_state": "children_activity_offered"
+            }
+          ]
+        },
+        "alternative_seat_offered": {
+          "terminal": true,
+          "result": "Пассажиру предложено альтернативное место при наличии."
+        },
+        "parents_addressed": {
+          "terminal": true,
+          "result": "С сопровождающими проведена вежливая коммуникация без провоцирования конфликта."
+        },
+        "private_discussion": {
+          "terminal": true,
+          "result": "Вопрос обсуждается индивидуально, без привлечения лишнего внимания."
+        },
+        "children_activity_offered": {
+          "terminal": true,
+          "result": "Предложены предусмотренные в исходном описании варианты для детей."
+        }
+      }
+    },
+    {
+      "situation_id": 15,
+      "task_type": "сервисная",
+      "source_situation_description": "Некомфортная температура (жарко/холодно)",
+      "entry_state": "temperature_complaint_received",
+      "states": {
+        "temperature_complaint_received": {
+          "allowed_transitions": [
+            {
+              "id": "listen_and_collect_feedback",
+              "match_player_meaning": "Игрок выслушивает пассажира и при возможности индивидуально опрашивает рядом сидящих пассажиров.",
+              "next_state": "feedback_collected"
+            }
+          ]
+        },
+        "feedback_collected": {
+          "engine_branches": [
+            {
+              "id": "preferences_compatible",
+              "game_state_condition": "Обратная связь пассажиров не содержит противоположных пожеланий по температуре.",
+              "next_state": "contact_engineer"
+            },
+            {
+              "id": "preferences_conflict",
+              "game_state_condition": "Одним пассажирам жарко, другим холодно.",
+              "next_state": "additional_comfort_options"
+            }
+          ]
+        },
+        "contact_engineer": {
+          "allowed_transitions": [
+            {
+              "id": "send_information_to_engineer",
+              "match_player_meaning": "Игрок передает информацию бортинженеру для корректировки температуры.",
+              "next_state": "follow_up"
+            }
+          ]
+        },
+        "additional_comfort_options": {
+          "allowed_transitions": [
+            {
+              "id": "offer_move_if_available",
+              "match_player_meaning": "Игрок предлагает пересадку при наличии мест.",
+              "guard": "Свободные места есть.",
+              "next_state": "follow_up"
+            },
+            {
+              "id": "offer_blanket",
+              "match_player_meaning": "Игрок предлагает плед.",
+              "next_state": "follow_up"
+            },
+            {
+              "id": "offer_tea",
+              "match_player_meaning": "Игрок предлагает чай.",
+              "next_state": "follow_up"
+            }
+          ]
+        },
+        "follow_up": {
+          "allowed_transitions": [
+            {
+              "id": "ask_about_comfort_later",
+              "match_player_meaning": "Игрок позже берет обратную связь и интересуется комфортом пассажира.",
+              "next_state": "completed"
+            }
+          ]
+        },
+        "completed": {
+          "terminal": true,
+          "result": "Получена обратная связь о комфорте после предпринятых действий."
+        }
+      }
+    },
+    {
+      "situation_id": 17,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажир потерял вещь",
+      "entry_state": "lost_item_reported",
+      "states": {
+        "lost_item_reported": {
+          "allowed_transitions": [
+            {
+              "id": "collect_item_details",
+              "match_player_meaning": "Игрок уточняет описание вещи, место и время потери.",
+              "next_state": "details_collected"
+            }
+          ]
+        },
+        "details_collected": {
+          "allowed_transitions": [
+            {
+              "id": "organize_search_and_inform_manager",
+              "match_player_meaning": "Игрок оказывает содействие в поиске и обязательно информирует начальника поезда.",
+              "next_state": "search_in_progress"
+            }
+          ]
+        },
+        "search_in_progress": {
+          "engine_branches": [
+            {
+              "id": "announcement_needed",
+              "game_state_condition": "Для поиска требуется объявление по громкой связи.",
+              "next_state": "manager_announcement"
+            },
+            {
+              "id": "police_needed",
+              "game_state_condition": "Возникла необходимость привлечь сотрудников полиции.",
+              "next_state": "police_involvement"
+            },
+            {
+              "id": "no_additional_action_defined",
+              "game_state_condition": "Дополнительные действия из situations.json не требуются.",
+              "next_state": "completed"
+            }
+          ]
+        },
+        "manager_announcement": {
+          "terminal": true,
+          "result": "Начальник поезда может сделать объявление по громкой связи."
+        },
+        "police_involvement": {
+          "terminal": true,
+          "result": "При необходимости вызываются сотрудники полиции."
+        },
+        "completed": {
+          "terminal": true,
+          "result": "Оказано содействие в поиске, начальник поезда проинформирован."
+        }
+      }
+    },
+    {
+      "situation_id": 28,
+      "task_type": "приоритетная",
+      "source_situation_description": "Пассажир просит предоставить лекарство",
+      "entry_state": "medicine_request_received",
+      "states": {
+        "medicine_request_received": {
+          "allowed_transitions": [
+            {
+              "id": "clarify_malaise_reason",
+              "match_player_meaning": "Игрок выясняет причину недомогания.",
+              "next_state": "reason_clarified"
+            },
+            {
+              "id": "refuse_personal_medicine",
+              "match_player_meaning": "Игрок не выдает личные лекарственные препараты и не привлекает коллег для выдачи их личных препаратов.",
+              "next_state": "notify_train_manager"
+            }
+          ]
+        },
+        "reason_clarified": {
+          "allowed_transitions": [
+            {
+              "id": "refuse_personal_medicine_after_clarification",
+              "match_player_meaning": "Игрок не выдает личные лекарственные препараты.",
+              "next_state": "notify_train_manager"
+            }
+          ]
+        },
+        "notify_train_manager": {
+          "allowed_transitions": [
+            {
+              "id": "inform_train_manager",
+              "match_player_meaning": "Игрок уведомляет начальника поезда.",
+              "next_state": "medical_help_decision"
+            }
+          ]
+        },
+        "medical_help_decision": {
+          "engine_branches": [
+            {
+              "id": "passenger_medic_needed",
+              "game_state_condition": "Необходимо привлечь медицинского работника из числа пассажиров.",
+              "next_state": "announce_for_medic"
+            },
+            {
+              "id": "station_medics_needed",
+              "game_state_condition": "Необходимо вызвать медицинских работников на ближайшей станции.",
+              "next_state": "call_station_medics"
+            },
+            {
+              "id": "no_additional_medical_action_defined",
+              "game_state_condition": "Дополнительные действия из situations.json не требуются.",
+              "next_state": "completed"
+            }
+          ]
+        },
+        "announce_for_medic": {
+          "terminal": true,
+          "result": "При необходимости по громкой связи вызывается медицинский работник из числа пассажиров."
+        },
+        "call_station_medics": {
+          "terminal": true,
+          "result": "Медицинские работники вызываются на ближайшей станции."
+        },
+        "completed": {
+          "terminal": true,
+          "result": "Личные лекарства не выданы, начальник поезда уведомлен."
+        }
+      }
+    },
+    {
+      "situation_id": 43,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажир недоволен, что услуга платная",
+      "entry_state": "paid_service_issue",
+      "states": {
+        "paid_service_issue": {
+          "allowed_transitions": [
+            {
+              "id": "state_service_is_paid",
+              "match_player_meaning": "Игрок сообщает пассажиру, что услуга предоставляется за дополнительную плату.",
+              "next_state": "consent_check"
+            },
+            {
+              "id": "confirm_price_and_consent_before_service",
+              "match_player_meaning": "Игрок до оказания услуги подтверждает цену и согласие пассажира.",
+              "next_state": "consent_result"
+            }
+          ]
+        },
+        "consent_check": {
+          "allowed_transitions": [
+            {
+              "id": "confirm_price_and_consent",
+              "match_player_meaning": "Игрок подтверждает цену и спрашивает согласие пассажира.",
+              "next_state": "consent_result"
+            }
+          ]
+        },
+        "consent_result": {
+          "engine_branches": [
+            {
+              "id": "passenger_agrees",
+              "game_state_condition": "Пассажир согласен с ценой и оплатой.",
+              "next_state": "consent_confirmed"
+            },
+            {
+              "id": "passenger_refuses_and_was_unaware",
+              "game_state_condition": "Пассажир не желает производить оплату и ранее не был осведомлен о платности услуги.",
+              "next_state": "refund_and_apologize"
+            },
+            {
+              "id": "other_refusal_case",
+              "game_state_condition": "Пассажир отказывается от оплаты, но условие его неосведомленности не подтверждено.",
+              "next_state": "source_gap_other_refusal"
+            }
+          ]
+        },
+        "refund_and_apologize": {
+          "allowed_transitions": [
+            {
+              "id": "refund_and_apologize_action",
+              "match_player_meaning": "Игрок осуществляет возврат денежных средств и приносит извинения.",
+              "next_state": "completed_refund"
+            }
+          ]
+        },
+        "consent_confirmed": {
+          "terminal": true,
+          "result": "Цена и согласие пассажира подтверждены до оказания услуги."
+        },
+        "completed_refund": {
+          "terminal": true,
+          "result": "При нежелании оплачивать и неосведомленности пассажира выполнен возврат денежных средств и принесены извинения."
+        },
+        "source_gap_other_refusal": {
+          "terminal": true,
+          "source_gap": true,
+          "result": "В situations.json отдельное дальнейшее действие для этого варианта отказа не описано."
+        }
+      }
+    },
+    {
+      "situation_id": 44,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажир хочет написать жалобу",
+      "entry_state": "complaint_request_received",
+      "states": {
+        "complaint_request_received": {
+          "allowed_transitions": [
+            {
+              "id": "ask_complaint_reason",
+              "match_player_meaning": "Игрок уточняет причину жалобы.",
+              "next_state": "reason_known"
+            }
+          ]
+        },
+        "reason_known": {
+          "engine_branches": [
+            {
+              "id": "passenger_open_to_resolution",
+              "game_state_condition": "Пассажир настроен на урегулирование ситуации на борту.",
+              "next_state": "attempt_onboard_resolution"
+            },
+            {
+              "id": "passenger_wants_to_submit_complaint",
+              "game_state_condition": "Пассажир хочет оставить обращение/жалобу.",
+              "next_state": "provide_complaint_channels"
+            }
+          ]
+        },
+        "attempt_onboard_resolution": {
+          "terminal": true,
+          "source_gap": true,
+          "result": "Следует постараться урегулировать ситуацию на борту, если пассажир согласен; конкретный способ урегулирования в situations.json не описан."
+        },
+        "provide_complaint_channels": {
+          "allowed_transitions": [
+            {
+              "id": "provide_available_channel",
+              "match_player_meaning": "Игрок предоставляет книгу отзывов и предложений, QR-код либо контакты на сайте/в приложении, не спорит и выполняет просьбу пассажира.",
+              "next_state": "complaint_channel_provided"
+            }
+          ]
+        },
+        "complaint_channel_provided": {
+          "terminal": true,
+          "result": "Пассажиру предоставлен доступный способ оставить обращение."
+        }
+      }
+    },
+    {
+      "situation_id": 46,
+      "task_type": "сервисная",
+      "source_situation_description": "Пассажира укачивает",
+      "entry_state": "motion_sickness_reported",
+      "states": {
+        "motion_sickness_reported": {
+          "engine_branches": [
+            {
+              "id": "travels_against_direction",
+              "game_state_condition": "Пассажир едет против хода движения.",
+              "next_state": "check_forward_seat"
+            },
+            {
+              "id": "does_not_travel_against_direction",
+              "game_state_condition": "Условие поездки против хода движения не подтверждено.",
+              "next_state": "offer_water"
+            }
+          ]
+        },
+        "check_forward_seat": {
+          "engine_branches": [
+            {
+              "id": "forward_seat_available",
+              "game_state_condition": "Есть место по ходу движения.",
+              "next_state": "offer_forward_seat"
+            },
+            {
+              "id": "forward_seat_not_available",
+              "game_state_condition": "Места по ходу движения нет.",
+              "next_state": "offer_water"
+            }
+          ]
+        },
+        "offer_forward_seat": {
+          "allowed_transitions": [
+            {
+              "id": "offer_move_forward",
+              "match_player_meaning": "Игрок предлагает пассажиру пересесть по ходу движения.",
+              "next_state": "offer_water"
+            }
+          ]
+        },
+        "offer_water": {
+          "allowed_transitions": [
+            {
+              "id": "offer_water_action",
+              "match_player_meaning": "Игрок предлагает пассажиру воду.",
+              "next_state": "lemon_check"
+            }
+          ]
+        },
+        "lemon_check": {
+          "engine_branches": [
+            {
+              "id": "lemon_available",
+              "game_state_condition": "Лимон есть в наличии.",
+              "next_state": "offer_lemon"
+            },
+            {
+              "id": "lemon_not_available",
+              "game_state_condition": "Лимона нет в наличии.",
+              "next_state": "follow_up"
+            }
+          ]
+        },
+        "offer_lemon": {
+          "allowed_transitions": [
+            {
+              "id": "offer_lemon_action",
+              "match_player_meaning": "Игрок предлагает лимон.",
+              "next_state": "follow_up"
+            }
+          ]
+        },
+        "follow_up": {
+          "allowed_transitions": [
+            {
+              "id": "ask_wellbeing_later",
+              "match_player_meaning": "Игрок позже подходит и спрашивает, как пассажир себя чувствует.",
+              "next_state": "completed"
+            }
+          ]
+        },
+        "completed": {
+          "terminal": true,
+          "result": "После оказанной помощи получена повторная обратная связь о самочувствии пассажира."
+        }
+      }
+    }
+  ]
+}
