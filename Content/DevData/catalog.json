@@ -1,0 +1,14 @@
+{
+  "items": [
+    {"key":"luggage-help","version":1,"title":"Помощь с багажом","type":"service","actorId":"passenger_01","opening":"Извините, не могу поднять чемодан на полку. Вы поможете найти ему безопасное место?"},
+    {"key":"seat-help","version":1,"title":"Поиск места","type":"service","actorId":"passenger_02","opening":"Я впервые в этом поезде и не могу найти своё место. Поможете сориентироваться?"},
+    {"key":"wifi-help","version":1,"title":"Подключение к Wi-Fi","type":"service","actorId":"passenger_03","opening":"Не получается подключиться к интернету. Мне нужно отправить сообщение перед встречей."},
+    {"key":"temperature","version":1,"title":"Температура в вагоне","type":"service","actorId":"passenger_04","opening":"Мне холодно у окна. Можно ли сделать поездку комфортнее?"},
+    {"key":"passenger-conflict","version":1,"title":"Конфликт пассажиров","type":"priority","actorId":"passenger_05","opening":"Сосед громко разговаривает по телефону и мешает отдыхать. Мы уже начали спорить."},
+    {"key":"document-check","version":1,"title":"Проверка документов","type":"priority","actorId":"passenger_06","opening":"Вот мой учебный документ. Кажется, в терминале указана другая дата рождения. Помогите разобраться."},
+    {"key":"missing-companion","version":1,"title":"Поиск сопровождаемого","type":"priority","actorId":"passenger_07","opening":"Не могу найти пожилого родственника. Мы разминулись между вагонами, и я волнуюсь."},
+    {"key":"medical-incident","version":1,"title":"Пассажиру плохо","type":"critical","actorId":"passenger_08","opening":"Мне внезапно стало плохо. Пожалуйста, позовите ответственного сотрудника."},
+    {"key":"suspicious-object","version":1,"title":"Неизвестный предмет","type":"critical","actorId":"passenger_09","opening":"В проходе стоит сумка, но никто рядом не признаёт её своей. Что мне делать?"},
+    {"key":"smoke","version":1,"title":"Задымление","type":"critical","actorId":"passenger_10","opening":"В конце вагона замечен дым. Люди начали вставать со своих мест."}
+  ]
+}
