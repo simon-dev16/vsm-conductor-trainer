@@ -30,6 +30,14 @@ FString UVSMWidget::ReadInput(FName WidgetName) const
 void UVSMWidget::RefreshBindings()
 {
     auto* Shift=GetShift();if(!Shift)return;
+    for(const auto& Pair:EnabledBindings)if(auto* Widget=GetWidgetFromName(Pair.Key))
+    {
+        bool Enabled=!Shift->bBusy;
+        if(Pair.Value==TEXT("action"))Enabled&=Shift->HasActiveShift()&&!Shift->bPendingRetry;
+        else if(Pair.Value==TEXT("retry"))Enabled&=Shift->bPendingRetry;
+        else if(Pair.Value==TEXT("start"))Enabled&=Shift->bAuthenticated&&!Shift->bPendingRetry;
+        Widget->SetIsEnabled(Enabled);
+    }
     for(auto& Pair:TextBindings)if(auto* Text=Cast<UTextBlock>(GetWidgetFromName(Pair.Key)))
     {
         FString Value;

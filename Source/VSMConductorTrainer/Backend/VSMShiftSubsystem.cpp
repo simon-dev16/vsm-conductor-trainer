@@ -227,6 +227,25 @@ FString UVSMShiftSubsystem::Field(const FString& Path) const
 {
     if(Path==TEXT("message"))return Message;
     if(Path==TEXT("speech"))return RecognizedText;
+    if(Path==TEXT("connection"))return bBusy?TEXT("Запрос выполняется…"):(bPendingRetry?TEXT("Ответ не получен. Нажмите «Повторить запрос»."):Message);
+    if(Path==TEXT("profile.activity"))
+    {
+        if(!Profile)return TEXT("Загрузите профиль.");
+        FString Result=TEXT("Уведомления\n");const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
+        if(Profile->TryGetArrayField(TEXT("notifications"),Rows))for(const auto& Row:*Rows)
+            if(auto O=Row->AsObject())Result+=O->GetStringField(TEXT("text"))+TEXT("\n");
+        Result+=TEXT("\nДостижения\n");
+        if(Profile->TryGetArrayField(TEXT("achievements"),Rows))for(const auto& Row:*Rows)Result+=Row->AsString()+TEXT("\n");
+        Result+=TEXT("\nПоследние смены\n");
+        if(Profile->TryGetArrayField(TEXT("history"),Rows))for(int32 I=Rows->Num()-1;I>=FMath::Max(0,Rows->Num()-10);--I)
+        {
+            auto O=(*Rows)[I]->AsObject();if(!O)continue;const TSharedPtr<FJsonObject>* Rating=nullptr;
+            const FString Score=O->TryGetObjectField(TEXT("rating"),Rating)?FString::Printf(TEXT("%.1f"),(*Rating)->GetNumberField(TEXT("rating"))):TEXT("—");
+            Result+=(O->GetStringField(TEXT("mode"))==TEXT("training")?TEXT("Тренировка"):TEXT("Рейтинговая смена"))+FString(TEXT(" · "))+O->GetStringField(TEXT("status"))+TEXT(" · ")+Score+TEXT("\n");
+        }
+        return Result;
+    }
+    if(Path==TEXT("report"))return ReportText();
     if(Path==TEXT("gauges"))return FString::Printf(TEXT("Безопасность %s / 100\nЛояльность %s / 100"),*Field(TEXT("safety")),*Field(TEXT("loyalty")));
     if(Path==TEXT("leaderboard"))
     {FString Result;const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;if(Leaderboard&&Leaderboard->TryGetArrayField(TEXT("items"),Rows))for(auto& R:*Rows){auto O=R->AsObject();Result+=FString::Printf(TEXT("%.0f. %s — %.0f%s\n"),O->GetNumberField(TEXT("rank")),*O->GetStringField(TEXT("name")),O->GetNumberField(TEXT("rating")),O->GetBoolField(TEXT("is_self"))?TEXT(" ← вы"):TEXT(""));}return Result;}
@@ -267,7 +286,16 @@ void UVSMShiftSubsystem::LoadLeaderboard(const FString& Scope){Request(TEXT("GET
 FString UVSMShiftSubsystem::ReportText() const
 {
     FString Result;const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
-    if(State && State->TryGetArrayField(TEXT("assessments"),Rows))for(auto& R:*Rows){auto O=R->AsObject();Result+=FString::Printf(TEXT("Решение %.0f / Общение %.0f / Оперативность %.0f\n"),O->GetNumberField(TEXT("decision")),(O->HasTypedField<EJson::Number>(TEXT("communication"))?O->GetNumberField(TEXT("communication")):0.),O->GetNumberField(TEXT("response")))+O->GetStringField(TEXT("reason"))+TEXT("\n\n");}
+    const TSharedPtr<FJsonObject>* Rating=nullptr;
+    if(State&&State->TryGetObjectField(TEXT("rating"),Rating))Result=FString::Printf(TEXT("Итоговый рейтинг: %.1f\nРешение %.1f · Общение %.1f · Оперативность %.1f\n\n"),(*Rating)->GetNumberField(TEXT("rating")),(*Rating)->GetNumberField(TEXT("decision")),(*Rating)->GetNumberField(TEXT("communication")),(*Rating)->GetNumberField(TEXT("response")));
+    if(State && State->TryGetArrayField(TEXT("assessments"),Rows))for(auto& R:*Rows)
+    {
+        auto O=R->AsObject();if(!O)continue;
+        const FString Communication=O->HasTypedField<EJson::Number>(TEXT("communication"))?FString::Printf(TEXT("%.0f"),O->GetNumberField(TEXT("communication"))):TEXT("не оценивается");
+        Result+=FString::Printf(TEXT("Решение %.0f / Общение %s / Оперативность %.0f\n"),O->GetNumberField(TEXT("decision")),*Communication,O->GetNumberField(TEXT("response")))+O->GetStringField(TEXT("reason"))+TEXT("\n");
+        FString Reason;if(O->TryGetStringField(TEXT("communication_reason"),Reason))Result+=Reason+TEXT("\n");
+        Result+=TEXT("\n");
+    }
     return Result.IsEmpty()?TEXT("Оценок пока нет. Без ключа ИИ ответы не оцениваются."):Result;
 }
 

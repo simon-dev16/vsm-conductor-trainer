@@ -39,6 +39,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void ViewInput(FVector2D Axis);
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void ToggleCamera();
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|UI") TMap<FName,FString> TextBindings;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|UI") TMap<FName,FString> EnabledBindings;
 protected:
     virtual void NativeConstruct() override;
     virtual FReply NativeOnTouchStarted(const FGeometry& Geometry,const FPointerEvent& Event) override;

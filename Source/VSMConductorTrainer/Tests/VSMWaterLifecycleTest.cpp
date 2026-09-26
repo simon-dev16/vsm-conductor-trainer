@@ -14,6 +14,7 @@
 #include "UI/VSMHUD.h"
 #include "Framework/VSMFramework.h"
 #include "Components/TextBlock.h"
+#include "Components/Button.h"
 
 class FWaterLifecycle : public IAutomationLatentCommand
 {
@@ -21,6 +22,14 @@ class FWaterLifecycle : public IAutomationLatentCommand
     int32 Step=0;
     double Started=FPlatformTime::Seconds();
     FString ShiftId;
+    bool Click(AVSMPlayerController* PC,const TCHAR* Name)
+    {
+        auto* HUD=Cast<AVSMHUD>(PC->GetHUD());auto* Widget=HUD?HUD->RootWidget.Get():nullptr;
+        auto* Button=Widget?Cast<UButton>(Widget->GetWidgetFromName(Name)):nullptr;
+        if(!Test->TestNotNull(Name,Button))return false;
+        if(!Test->TestTrue(FString(Name)+TEXT(" enabled"),Button->GetIsEnabled()))return false;
+        Button->OnClicked.Broadcast();return true;
+    }
 public:
     explicit FWaterLifecycle(FAutomationTestBase* InTest):Test(InTest){}
     virtual bool Update() override
@@ -32,15 +41,29 @@ public:
         if(Shift->bBusy)return false;
         switch(Step)
         {
-        case 0:Shift->SignIn(TEXT("fixture"),TEXT("fixture-password"),false);++Step;return false;
+        case 0:
+        {
+            PC->Navigate(EVSMUIScreen::Settings);
+            if(!Click(PC,TEXT("BackButton")))return true;
+            if(!Test->TestTrue(TEXT("Settings back graph"),PC->GetScreen()==EVSMUIScreen::Welcome))return true;
+            if(!Click(PC,TEXT("LoginButton")))return true;
+            auto* Widget=Cast<UVSMWidget>(Cast<AVSMHUD>(PC->GetHUD())->RootWidget.Get());
+            Widget->WriteInput(TEXT("LoginInput"),TEXT("fixture"));Widget->WriteInput(TEXT("PasswordInput"),TEXT("fixture-password"));
+            if(!Click(PC,TEXT("LoginButton")))return true;
+            ++Step;return false;
+        }
         case 1:
             if(!Test->TestTrue(TEXT("Fixture authentication"),Shift->bAuthenticated))return true;
-            Shift->StartShift(false,46);++Step;return false;
+            if(!Click(PC,TEXT("TrainWater")))return true;
+            ++Step;return false;
         case 2:
             if(!Test->TestTrue(TEXT("Shift active"),Shift->HasActiveShift()))return true;
             Test->TestNotNull(TEXT("Gameplay uses an actual UMG screen"),Cast<AVSMHUD>(PC->GetHUD())->RootWidget.Get());
             ShiftId=Shift->GetShiftId();Shift->SelectPassenger(TEXT("passenger_01"));
-            Shift->SendAction(TEXT("answer"),TEXT("Да, сейчас принесу воду."));++Step;return false;
+            PC->Navigate(EVSMUIScreen::Dialogue);
+            Cast<UVSMWidget>(Cast<AVSMHUD>(PC->GetHUD())->RootWidget.Get())->WriteInput(TEXT("AnswerInput"),TEXT("Да, сейчас принесу воду."));
+            if(!Click(PC,TEXT("SendAnswer")))return true;
+            ++Step;return false;
         case 3:
         {
             Test->TestTrue(TEXT("Station marked only after promise"),Shift->GetWorldView(TEXT("conductor_station")).bMarker);
@@ -75,7 +98,9 @@ public:
         case 8:
             Test->TestFalse(TEXT("Completed passenger task marker removed"),Shift->GetWorldView(TEXT("passenger_01")).bMarker);
             Test->TestTrue(TEXT("Final assessment visible"),Shift->ReportText().Contains(TEXT("100")));
-            Shift->SendAction(TEXT("finish"));++Step;return false;
+            PC->Navigate(EVSMUIScreen::Gameplay);
+            if(!Click(PC,TEXT("FinishButton")))return true;
+            ++Step;return false;
         default:
             Test->TestFalse(TEXT("Training completed"),Shift->HasActiveShift());return true;
         }
