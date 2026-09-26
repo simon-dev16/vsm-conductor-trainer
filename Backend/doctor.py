@@ -208,6 +208,8 @@ def main():
             out('    1. добавь VSM_BIND=0.0.0.0 в Backend/.env и перезапусти сервер')
             out(f'    2. в Config/DefaultGame.ini поставь ApiBaseUrlV2="http://{lan}:{port}"')
             out('    3. телефон и компьютер в одной сети, и файрвол пускает порт')
+            out('    либо не правь ini, а запусти: Launch Live.cmd -ApiBaseUrl '
+                f'http://{lan}:{port}')
         else:
             out('  адрес в локальной сети определить не удалось — компьютер не в сети')
     else:
