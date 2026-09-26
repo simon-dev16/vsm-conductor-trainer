@@ -34,6 +34,10 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def respond(self,status,value):
+        self.status_code=status
+        if isinstance(value,dict):
+            code=(value.get('error') or {}).get('code')
+            if code: self.error_code=code
         raw=json.dumps(value,ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header('Content-Type','application/json; charset=utf-8')
@@ -48,6 +52,8 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self):
         started=time.monotonic()
         path=urlsplit(self.path).path
+        self.status_code=0
+        self.error_code=''
         try:
             with self.server.rate_lock:
                 now=time.monotonic()
@@ -118,11 +124,17 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(exc.status,{'error':{'code':exc.code,'message':str(exc)}})
         except (TimeoutError,ConnectionError):
             return
-        except Exception:
-            logging.error('Internal error in %s %s',self.command,path)
+        except Exception as exc:
+            # Тело ответа провайдера сюда не попадает, но ключ может лежать в аргументах исключения,
+            # поэтому трейсбек печатается только по явному запросу.
+            logging.error('Internal error in %s %s: %s',self.command,path,type(exc).__name__)
+            if os.getenv('VSM_LOG_TRACEBACK'):
+                logging.exception('Traceback for %s %s',self.command,path)
             self.respond(500,{'error':{'code':'internal_error','message':'Внутренняя ошибка сервера.'}})
         finally:
-            logging.info('%s %s %.3fs',self.command,path,time.monotonic()-started)
+            logging.info('%s %s -> %d%s %.3fs %s',self.command,path,self.status_code or 0,
+                         f' {self.error_code}' if self.error_code else '',
+                         time.monotonic()-started,self.client_address[0])
 
     do_GET=dispatch
     do_POST=dispatch
