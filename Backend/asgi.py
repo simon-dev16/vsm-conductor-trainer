@@ -80,6 +80,10 @@ def leaderboard(scope:str,request:Request):return store.leaderboard(user(request
 def start(body:dict,request:Request):return store.start(user(request),body)
 
 
+@app.get('/v2/shifts/current')
+def current_shift(request:Request):return store.current(user(request))
+
+
 @app.get('/v2/shifts/{shift_id}')
 def get_shift(shift_id:str,request:Request):return store.get(user(request),shift_id)
 

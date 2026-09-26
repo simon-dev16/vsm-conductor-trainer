@@ -99,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,store.leaderboard(user_id,path.rsplit('/',1)[1]))
                 if self.command=='POST' and path=='/v2/shifts':
                     return self.respond(201,store.start(user_id,body))
+                if self.command=='GET' and path=='/v2/shifts/current':
+                    return self.respond(200,store.current(user_id))
                 parts=path.strip('/').split('/')
                 if len(parts)==3 and parts[:2]==['v2','shifts'] and self.command=='GET':
                     return self.respond(200,store.get(user_id,parts[2]))

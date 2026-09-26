@@ -39,7 +39,10 @@ class ShiftStore:
                 'CREATE TABLE IF NOT EXISTS v2_sessions(token TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES v2_users(id), expires DOUBLE PRECISION NOT NULL)',
                 'CREATE TABLE IF NOT EXISTS v2_shifts(id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES v2_users(id), day TEXT NOT NULL, mode TEXT NOT NULL, state TEXT NOT NULL)',
                 'CREATE TABLE IF NOT EXISTS v2_actions(user_id TEXT NOT NULL, action_id TEXT NOT NULL, fingerprint TEXT NOT NULL, response TEXT NOT NULL, PRIMARY KEY(user_id,action_id))',
-                'INSERT INTO v2_migrations(version) VALUES(1) ON CONFLICT DO NOTHING'):
+                'CREATE INDEX IF NOT EXISTS v2_shifts_by_user ON v2_shifts(user_id)',
+                'CREATE TABLE IF NOT EXISTS v2_current_shifts(user_id TEXT PRIMARY KEY REFERENCES v2_users(id), shift_id TEXT NOT NULL)',
+                'INSERT INTO v2_migrations(version) VALUES(1) ON CONFLICT DO NOTHING',
+                'INSERT INTO v2_migrations(version) VALUES(2) ON CONFLICT DO NOTHING'):
                 db.execute(statement)
 
     @contextmanager
@@ -148,9 +151,51 @@ class ShiftStore:
             if mode=='ranked' and count>=10:
                 raise ApiError(429,'daily_attempts_exhausted','На сегодня попытки закончились.')
             value=self.engine.begin(mode,self.clock(),body.get('situation_id',46))
+            self._settle_current(db,user,profile,replace=True)
             db.execute('INSERT INTO v2_shifts VALUES(?,?,?,?,?)',(value['id'],user,self.day(),mode,encode(value)))
+            self._set_current(db,user,value['id'])
             return self.engine.snapshot(value,self.clock())
         return self._mutation(user,body,'start',operation)
+
+    def _settle_current(self, db, user, profile, replace=False):
+        pointer = db.execute('SELECT shift_id FROM v2_current_shifts WHERE user_id=?',(user,)).fetchone()
+        if pointer:
+            rows = db.execute('SELECT state FROM v2_shifts WHERE user_id=? AND id=?',(user,pointer['shift_id'])).fetchall()
+        else:
+            rows = db.execute('SELECT state FROM v2_shifts WHERE user_id=?',(user,)).fetchall()
+        values = [json.loads(row['state']) for row in rows]
+        values.sort(key=lambda value: (value['started_at'], value['id']), reverse=True)
+        current = None
+        now = self.clock()
+        for value in values:
+            if value.get('recorded'):
+                continue
+            engine = self._engine_for(value)
+            before = encode(value)
+            engine.tick(value, now)
+            if value['status'] == 'active':
+                if replace or current is not None:
+                    engine.finish(value, 'cancelled')
+                    value['events'].append({'kind':'replaced_by_new_shift','at':now})
+                else:
+                    current = value
+            self._record_result(db, user, profile, value)
+            if encode(value) != before:
+                value['revision'] += 1
+                db.execute('UPDATE v2_shifts SET state=? WHERE id=?', (encode(value),value['id']))
+        self._set_current(db,user,current['id'] if current else '')
+        return current
+
+    @staticmethod
+    def _set_current(db,user,shift_id):
+        db.execute('INSERT INTO v2_current_shifts VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET shift_id=excluded.shift_id',
+                   (user,shift_id))
+
+    def current(self, user):
+        with self.lock, self.connect() as db:
+            profile = self._user_lock(db, user)
+            value = self._settle_current(db, user, profile)
+            return {'shift': self._engine_for(value).snapshot(value,self.clock()) if value else None}
 
     def _load(self,db,user,shift_id):
         row=db.execute('SELECT state FROM v2_shifts WHERE id=? AND user_id=?',(shift_id,user)).fetchone()
