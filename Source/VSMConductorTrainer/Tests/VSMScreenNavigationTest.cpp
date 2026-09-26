@@ -7,6 +7,8 @@
 #include "Engine/GameInstance.h"
 #include "Backend/VSMShiftSubsystem.h"
 #include "Gameplay/VSMPlayerController.h"
+#include "Gameplay/VSMPlayerCharacter.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "UI/VSMHUD.h"
 #include "Framework/VSMFramework.h"
 #include "Components/TextBlock.h"
@@ -98,6 +100,17 @@ public:
             Test->TestTrue(TEXT("Leaderboard request replaced the placeholder"),Shift->Field(TEXT("leaderboard"))!=BoardBefore);
             if(!Bound(PC,TEXT("LeaderboardText"),TEXT("leaderboard")))return true;
             PC->Navigate(EVSMUIScreen::Gameplay);
+            // The perspective button only proves itself if the boom really follows
+            // the mode, not just that a handler exists.
+            {
+                auto* Conductor=Cast<AVSMPlayerCharacter>(PC->GetPawn());
+                const bool bFirstBefore=Conductor?Conductor->bFirstPerson:false;
+                if(!Click(PC,TEXT("Camera")))return true;
+                if(!Test->TestTrue(TEXT("Camera button toggles the perspective"),Conductor&&Conductor->bFirstPerson!=bFirstBefore))return true;
+                if(!Test->TestTrue(TEXT("Camera boom follows the perspective"),
+                    Conductor&&(Conductor->bFirstPerson?Conductor->CameraBoom->TargetArmLength==0.f
+                                                        :Conductor->CameraBoom->TargetArmLength==Conductor->ThirdPersonDistance)))return true;
+            }
             if(!Click(PC,TEXT("HelpButton")))return true;
             if(!Test->TestTrue(TEXT("HelpButton opens tutorial"),PC->GetScreen()==EVSMUIScreen::Tutorial))return true;
             ++Step;return false;
