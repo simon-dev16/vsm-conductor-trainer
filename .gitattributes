@@ -1,0 +1,6 @@
+* text=auto
+*.uasset binary
+*.umap binary
+*.cpp text eol=lf
+*.h text eol=lf
+*.md text eol=lf

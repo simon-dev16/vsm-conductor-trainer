@@ -1,0 +1,11 @@
+.git
+Binaries
+Intermediate
+Saved
+DerivedDataCache
+Build
+Content
+Plugins
+Backend/.env
+Backend/data
+**/__pycache__
