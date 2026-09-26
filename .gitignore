@@ -1,0 +1,42 @@
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+.vs/
+*.sln
+*.suo
+*.VC.db
+*.sdf
+*.opensdf
+.env
+.env.*
+!*.example
+Build/Artifacts/
+Build/*/FileOpenOrder/
+Tools/__pycache__/
+Backend/__pycache__/
+Backend/data/
+Backend/tests/__pycache__/
+*.pyc
+Backend/.venv/
+# Локальный MCP-плагин редактора — инструментарий, не код проекта.
+# В нём Intermediate ~1,5 ГБ и Binaries ~160 МБ, коммитить их нельзя.
+Plugins/McpAutomationBridge/
+
+Docs.zip
+Backend/*.log
+Backend/*.out
+Backend/*.err
+
+# --- Продукты работы ИИ: в репозиторий не кладутся --------------------------
+# Всё, что нейросеть выдаёт как текстовый артефакт: журнал HANDOFF, отчёты,
+# инструкции, разборы. По решению владельца проекта от 26.09.2026.
+# Сейчас под правило попадают 11 файлов: README.md и 10 файлов в Docs/.
+# Чтобы вернуть документацию в репозиторий — удалите эту строку.
+# Файлы на диске при этом не теряются, .gitignore ничего не удаляет.
+*.md
+
+# Широкие маски на картинки и бинарники намеренно НЕ добавлены:
+# в Content/ лежат настоящие ассеты игры, их исключать нельзя.
+# Контрольные кадры и логи проверок уже закрыты правилом Saved/ выше.
+
