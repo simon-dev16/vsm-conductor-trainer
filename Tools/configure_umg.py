@@ -22,6 +22,11 @@ bindings = {
  'GameplayHUD':{'Gauges':'gauges','Timer':'remaining_seconds','Tasks':'tasks','Status':'message',**{f'Slot{i}Label':f'slot:{i}' for i in range(8)}},
  'Login':{'Status':'message'}, 'Training':{'Status':'message'},
  'Dialogue':{'Status':'message','PassengerLine':'task','SpeechText':'speech'},
+ 'MainMenu':{'Status':'connection'},
+ 'TicketCheck':{'Status':'message'},
+ 'Profile':{'Activity':'profile.activity','StatusText':'message'},
+ 'Leaderboard':{'LeaderboardText':'leaderboard','StatusText':'message'},
+ 'Results':{'ReportText':'report','StatusText':'message'},
 }
 for name,values in bindings.items():
     asset = screens+'WBP_'+name
