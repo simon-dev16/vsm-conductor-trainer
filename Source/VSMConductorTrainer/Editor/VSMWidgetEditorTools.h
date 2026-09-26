@@ -26,5 +26,13 @@ public:
     /** "name=count" for every name that appears more than once in ListWidgetNames. */
     UFUNCTION(BlueprintCallable, Category="VSM|Editor")
     static TArray<FString> ListRepeatedNames(UObject* WidgetBlueprint);
+
+    /**
+     * Widgets whose canvas rect leaves the Width x Height design area, as
+     * "name x,y w,h". The project DPI rule is ShortestSide with a 1.0 scale at
+     * 720, so 1280x720 is the layout the screens are authored against.
+     */
+    UFUNCTION(BlueprintCallable, Category="VSM|Editor")
+    static TArray<FString> ListOutOfBoundsWidgets(UObject* WidgetBlueprint, int32 Width=1280, int32 Height=720);
 #endif
 };

@@ -113,6 +113,19 @@ for name in MAPPING.values():
         REPEATED[name] = repeated
 note('repeated names: ' + json.dumps(REPEATED, ensure_ascii=False))
 
+# --- layout audit ----------------------------------------------------------
+# Project DPI rule is ShortestSide with scale 1.0 at 720, so 1280x720 is the box
+# the screens are authored against: flag anything a canvas slot pushes outside it.
+OUT_OF_BOUNDS = {}
+for name in MAPPING.values():
+    asset = widget_asset(name)
+    if not asset:
+        continue
+    offenders = [str(item) for item in unreal.VSMWidgetEditorTools.list_out_of_bounds_widgets(asset, 1280, 720)]
+    if offenders:
+        OUT_OF_BOUNDS[name] = offenders
+note('out of bounds at 1280x720: ' + json.dumps(OUT_OF_BOUNDS, ensure_ascii=False))
+
 # --- level -----------------------------------------------------------------
 unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).save_current_level()
 note('DONE')
