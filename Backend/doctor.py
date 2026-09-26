@@ -9,6 +9,7 @@
 """
 import json
 import os
+import socket
 import sys
 import urllib.error
 import urllib.request
@@ -29,6 +30,7 @@ KEYS = [
     ('VSM_AI_TIMEOUT', '45', 'Таймаут запроса к модели, секунды (5..90).', False),
     ('VSM_SPEECHKIT_API_KEY', '', 'Ключ SpeechKit. Без него доступен только текстовый ответ.', False),
     ('VSM_PORT', '18767', 'Порт локального сервера.', False),
+    ('VSM_BIND', '127.0.0.1', 'Адрес прослушивания. 0.0.0.0 нужен только для телефона.', False),
     ('VSM_DEMO_PASSWORD', '', 'Пароль демо-пользователя.', False),
     ('VSM_DATABASE', 'Backend/data/vsm.sqlite3', 'Файл базы смен.', False),
 ]
@@ -114,6 +116,18 @@ def probe_model(provider):
         return False, 'провайдер не ответил — нет сети или сбил лимит времени', 'ai_unavailable'
 
 
+def lan_address():
+    """Адрес этого компьютера в локальной сети. Пакеты не уходят: connect() у UDP только выбирает маршрут."""
+    probe=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+    try:
+        probe.connect(('192.0.2.1',1))
+        return probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+
+
 def health(port):
     try:
         with urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=4) as response:
@@ -182,7 +196,26 @@ def main():
             fail('Ключи в .env есть, но сервер их не видит. Перезапусти сервер: .env читается только при старте.')
 
     out()
-    out('--- 3. РЕАЛЬНЫЙ ЗАПРОС К МОДЕЛИ ---')
+    out('--- 3. ТЕЛЕФОН ---')
+    bind=os.getenv('VSM_BIND','127.0.0.1')
+    lan=lan_address()
+    if bind!='0.0.0.0' and bind!='::':
+        out(f'  сервер слушает {bind} — с телефона сюда не достучаться')
+        if lan:
+            out(f'  адрес в локальной сети: http://{lan}:{port}')
+            out('  если это не тот адрес, посмотри ipconfig и возьми адрес Wi-Fi')
+            out('  чтобы проверить на телефоне:')
+            out('    1. добавь VSM_BIND=0.0.0.0 в Backend/.env и перезапусти сервер')
+            out(f'    2. в Config/DefaultGame.ini поставь ApiBaseUrlV2="http://{lan}:{port}"')
+            out('    3. телефон и компьютер в одной сети, и файрвол пускает порт')
+        else:
+            out('  адрес в локальной сети определить не удалось — компьютер не в сети')
+    else:
+        out(f'  сервер слушает {bind}, с телефона доступен' + (f' как http://{lan}:{port}' if lan else ''))
+        out(f'  в клиенте должно быть ApiBaseUrlV2="http://{lan}:{port}"' if lan else '  в клиенте должен быть адрес этого компьютера')
+
+    out()
+    out('--- 4. РЕАЛЬНЫЙ ЗАПРОС К МОДЕЛИ ---')
     if not live:
         out('  пропущен. Запусти с --live, когда ключи будут вписаны (тратит немного квоты).')
     elif not ai_ready:
