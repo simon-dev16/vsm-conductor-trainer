@@ -15,6 +15,12 @@ AVSMPlayerController* UVSMWidget::GetConductorController() const
     return Cast<AVSMPlayerController>(GetOwningPlayer());
 }
 UVSMShiftSubsystem* UVSMWidget::GetShift() const {return GetGameInstance()?GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>():nullptr;}
+void UVSMWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+    if(auto* Shift=GetShift())Shift->OnChanged.AddUniqueDynamic(this,&UVSMWidget::RefreshBindings);
+    RefreshBindings();
+}
 FString UVSMWidget::ReadInput(FName WidgetName) const
 {
     if(auto* Box=Cast<UEditableTextBox>(GetWidgetFromName(WidgetName)))return Box->GetText().ToString();
@@ -63,4 +69,4 @@ FReply UVSMWidget::NativeOnTouchEnded(const FGeometry& G,const FPointerEvent& E)
     if(E.GetPointerIndex()==LookFinger){LookFinger=INDEX_NONE;return FReply::Handled();}
     return FReply::Unhandled();
 }
-void UVSMWidget::NativeDestruct(){MoveInput(FVector2D::ZeroVector);MoveFinger=LookFinger=INDEX_NONE;Super::NativeDestruct();}
+void UVSMWidget::NativeDestruct(){if(auto* Shift=GetShift())Shift->OnChanged.RemoveDynamic(this,&UVSMWidget::RefreshBindings);MoveInput(FVector2D::ZeroVector);MoveFinger=LookFinger=INDEX_NONE;Super::NativeDestruct();}

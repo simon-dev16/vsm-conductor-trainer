@@ -12,6 +12,8 @@
 #include "Misc/Parse.h"
 #include "Core/VSMLog.h"
 #include "AudioCaptureCore.h"
+#include "Backend/VSMShiftJournal.h"
+#include "Misc/SecureHash.h"
 #include "Misc/Base64.h"
 #include "Misc/ScopeLock.h"
 #include "Config/VSMBackendSettings.h"
@@ -94,7 +96,8 @@ void UVSMShiftSubsystem::Request(const FString& Method,const FString& Path,TShar
 #endif
     if(!bAllowed){Message=FString::Printf(TEXT("Для сервера требуется HTTPS (адрес: %s)."),*BaseUrl);UE_LOG(LogVSMNetwork,Warning,TEXT("Rejected request: '%s' is neither HTTPS nor loopback"),*BaseUrl);OnChanged.Broadcast();return;}
     if(Body && Body->HasField(TEXT("clientActionId")))
-    {PendingMethod=Method;PendingPath=Path;PendingBody=Body;PendingReply=Callback;}
+    {PendingMethod=Method;PendingPath=Path;PendingBody=Body;PendingReply=Callback;
+     if(!SavePending()){bPendingRetry=true;Message=TEXT("Не удалось сохранить действие на устройстве. Повторите запрос.");OnChanged.Broadcast();return;}}
     bBusy=true;Message=TEXT("Подключение…");OnChanged.Broadcast();
     auto Http=FHttpModule::Get().CreateRequest();
     Http->SetURL(BaseUrl+Path);Http->SetVerb(Method);Http->SetTimeout(65);
@@ -102,12 +105,12 @@ void UVSMShiftSubsystem::Request(const FString& Method,const FString& Path,TShar
     if(!Token.IsEmpty())Http->SetHeader(TEXT("Authorization"),TEXT("Bearer ")+Token);
     if(Body){FString Json;FJsonSerializer::Serialize(Body.ToSharedRef(),TJsonWriterFactory<>::Create(&Json));Http->SetContentAsString(Json);}
     TWeakObjectPtr<UVSMShiftSubsystem> WeakThis(this);
-    Http->OnProcessRequestComplete().BindLambda([WeakThis,Callback](FHttpRequestPtr,FHttpResponsePtr Response,bool bOK)
+    Http->OnProcessRequestComplete().BindLambda([WeakThis,Callback,Path](FHttpRequestPtr,FHttpResponsePtr Response,bool bOK)
     {
         if(!WeakThis.IsValid())return;
         auto* Self=WeakThis.Get();Self->bBusy=false;
         TSharedPtr<FJsonObject> Value;
-        if(!bOK || !Response.IsValid() || Response->GetContentLength()>2*1024*1024 || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Response->GetContentAsString()),Value) || !Value.IsValid())
+        if(!bOK || !Response.IsValid() || Response->GetContent().Num()>2*1024*1024 || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Response->GetContentAsString()),Value) || !Value.IsValid())
         {Self->bPendingRetry=Self->PendingBody.IsValid();Self->Message=TEXT("Ответ не получен. Повторите запрос: действие не будет выполнено дважды.");Self->OnChanged.Broadcast();return;}
         if(Response->GetResponseCode()<200 || Response->GetResponseCode()>=300)
         {
@@ -115,11 +118,10 @@ void UVSMShiftSubsystem::Request(const FString& Method,const FString& Path,TShar
             if(Value->TryGetObjectField(TEXT("error"),Error))(*Error)->TryGetStringField(TEXT("message"),Self->Message);
             if(Response->GetResponseCode()==401){Self->Token.Empty();Self->bAuthenticated=false;Self->bPendingRetry=Self->PendingBody.IsValid();}
             if(Response->GetResponseCode()>=500)Self->bPendingRetry=Self->PendingBody.IsValid();
-            else if(Response->GetResponseCode()!=401){Self->PendingBody.Reset();Self->PendingReply=nullptr;Self->bPendingRetry=false;}
+            else if(Response->GetResponseCode()!=401 && !Path.StartsWith(TEXT("/v2/auth/")))Self->ClearPending();
             if(Response->GetResponseCode()==409)Self->RefreshShift();
             Self->OnChanged.Broadcast();return;
         }
-        if(Self->PendingBody.IsValid() && !Self->bPendingRetry){Self->PendingBody.Reset();Self->PendingReply=nullptr;}
         Self->Message=TEXT("");Callback(Value);Self->OnChanged.Broadcast();
     });
     if(!Http->ProcessRequest()){bBusy=false;bPendingRetry=PendingBody.IsValid();Message=TEXT("Не удалось отправить запрос. Повторите действие.");OnChanged.Broadcast();}
@@ -131,26 +133,61 @@ void UVSMShiftSubsystem::RetryPending()
     const auto Body=PendingBody;const auto Callback=PendingReply;
     const FString Method=PendingMethod,Path=PendingPath;
     bPendingRetry=false;
-    Request(Method,Path,Body,Callback);
+    Request(Method,Path,Body,[this,Callback](auto Value){Callback(Value);if(!bPendingRetry)RecoverCurrentShift(bEnterAfterRecovery);});
 }
 void UVSMShiftSubsystem::SignIn(const FString& Login,const FString& Password,bool bRegister)
 {
     auto Body=MakeShared<FJsonObject>();Body->SetStringField(TEXT("login"),Login);Body->SetStringField(TEXT("password"),Password);
     Request(TEXT("POST"),bRegister?TEXT("/v2/auth/register"):TEXT("/v2/auth/login"),Body,[this](auto Value)
-    {bAuthenticated=Value->TryGetStringField(TEXT("accessToken"),Token);if(bAuthenticated)if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Scenarios);});
+    {
+        const TSharedPtr<FJsonObject>* User=nullptr;
+        FString NewToken,NewUser;
+        if(!Value->TryGetStringField(TEXT("accessToken"),NewToken)||!Value->TryGetObjectField(TEXT("user"),User)||!(*User)->TryGetStringField(TEXT("id"),NewUser))
+        {Message=TEXT("Некорректный ответ входа.");return;}
+        Token=NewToken;UserId=NewUser;bAuthenticated=true;
+        State.Reset();ShiftId.Empty();TaskId.Empty();Profile.Reset();Leaderboard.Reset();
+        PendingBody.Reset();PendingReply=nullptr;bPendingRetry=false;RestorePending();
+        if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Scenarios);
+        if(bPendingRetry)RetryPending();else RecoverCurrentShift(false);
+    });
 }
 void UVSMShiftSubsystem::StartShift(bool bRanked,int32 SituationId)
 {
     if(!bAuthenticated){Message=TEXT("Войдите или создайте учебный аккаунт.");OnChanged.Broadcast();return;}
     auto Body=MakeShared<FJsonObject>();Body->SetStringField(TEXT("clientActionId"),FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
     Body->SetStringField(TEXT("mode"),bRanked?TEXT("ranked"):TEXT("training"));Body->SetNumberField(TEXT("situation_id"),SituationId);
-    Request(TEXT("POST"),TEXT("/v2/shifts"),Body,[this](auto Value){Accept(Value);if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Gameplay);});
+    Request(TEXT("POST"),TEXT("/v2/shifts"),Body,[this](auto Value){ApplyMutation(Value,TEXT("start"));});
 }
-void UVSMShiftSubsystem::Accept(TSharedPtr<FJsonObject> Value)
+bool UVSMShiftSubsystem::Accept(TSharedPtr<FJsonObject> Value)
 {
     FString Id;double Revision;
-    if(!Value->TryGetStringField(TEXT("id"),Id)||!Value->TryGetNumberField(TEXT("revision"),Revision)) {Message=TEXT("Некорректное состояние смены.");return;}
-    State=Value;ShiftId=Id;ReceivedAt=FPlatformTime::Seconds();if(TaskId.IsEmpty()||!CurrentTask())State->TryGetStringField(TEXT("selected_task"),TaskId);
+    if(!Value->TryGetStringField(TEXT("id"),Id)||!Value->TryGetNumberField(TEXT("revision"),Revision)) {Message=TEXT("Некорректное состояние смены.");return false;}
+    const TArray<TSharedPtr<FJsonValue>>* Inventory=nullptr;
+    const TArray<TSharedPtr<FJsonValue>>* ValidatedTasks=nullptr;
+    FString StatusValue;
+    if(Id.IsEmpty()||Revision<0||!Value->TryGetStringField(TEXT("status"),StatusValue)||
+       !Value->TryGetArrayField(TEXT("inventory"),Inventory)||Inventory->Num()!=8||!Value->TryGetArrayField(TEXT("tasks"),ValidatedTasks))
+    {Message=TEXT("Неполный снимок смены.");return false;}
+    if(StatusValue!=TEXT("active")&&StatusValue!=TEXT("completed")&&StatusValue!=TEXT("failed")&&StatusValue!=TEXT("cancelled"))return false;
+    for(const TCHAR* Key:{TEXT("safety"),TEXT("loyalty"),TEXT("remaining_seconds")})
+        if(!Value->HasTypedField<EJson::Number>(Key)){Message=TEXT("Снимок не содержит метрики.");return false;}
+    for(const auto& Entry:*Inventory)
+        if(!Entry->IsNull() && (Entry->Type!=EJson::Object || !Entry->AsObject()->HasTypedField<EJson::String>(TEXT("item_id")) || !Entry->AsObject()->HasTypedField<EJson::String>(TEXT("instance_id"))))return false;
+    for(const auto& Entry:*ValidatedTasks)
+    {
+        if(Entry->Type!=EJson::Object)return false;
+        const auto Task=Entry->AsObject();
+        for(const TCHAR* Key:{TEXT("id"),TEXT("actor_id"),TEXT("status"),TEXT("text"),TEXT("title"),TEXT("task_type")})if(!Task->HasTypedField<EJson::String>(Key))return false;
+        if(!Task->HasTypedField<EJson::Number>(TEXT("remaining_seconds")))return false;
+    }
+    if(Id==ShiftId && State && Revision<State->GetNumberField(TEXT("revision")))return true;
+    const bool bNewShift=ShiftId!=Id;
+    State=Value;ShiftId=Id;ReceivedAt=FPlatformTime::Seconds();
+    if(bNewShift || (!TaskId.IsEmpty() && !CurrentTask()))
+    {
+        TaskId.Empty();State->TryGetStringField(TEXT("selected_task"),TaskId);
+        if(auto Task=CurrentTask())PassengerId=Task->GetStringField(TEXT("actor_id"));
+    }
     for(TActorIterator<AVSMPassengerCharacter> It(GetWorld());It;++It)
     {
         It->bHasTask=false;
@@ -160,6 +197,7 @@ void UVSMShiftSubsystem::Accept(TSharedPtr<FJsonObject> Value)
     }
     FString Status;State->TryGetStringField(TEXT("status"),Status);
     if(Status!=TEXT("active"))if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Results);
+    return true;
 }
 void UVSMShiftSubsystem::RefreshShift(){if(!ShiftId.IsEmpty())Request(TEXT("GET"),TEXT("/v2/shifts/")+ShiftId,nullptr,[this](auto V){Accept(V);});}
 void UVSMShiftSubsystem::SendAction(const FString& Kind,const FString& Text,int32 Slot,bool bAccept)
@@ -171,11 +209,9 @@ void UVSMShiftSubsystem::SendAction(const FString& Kind,const FString& Text,int3
     Body->SetNumberField(TEXT("slot"),Slot);Body->SetBoolField(TEXT("accept"),bAccept);
     if(auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0))
     {const auto P=Pawn->GetActorLocation();Body->SetArrayField(TEXT("position"),{MakeShared<FJsonValueNumber>(P.X),MakeShared<FJsonValueNumber>(P.Y),MakeShared<FJsonValueNumber>(P.Z)});}
-    Request(TEXT("POST"),TEXT("/v2/shifts/")+ShiftId+TEXT("/actions"),Body,[this,Kind](auto Value){Accept(Value);
-        if(Kind==TEXT("answer") && CurrentTask() && CurrentTask()->HasTypedField<EJson::Object>(TEXT("pending_action")))
-            if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0))){if(auto* P=Cast<AVSMPlayerCharacter>(PC->GetPawn()))P->SetFirstPerson(false);PC->Navigate(EVSMUIScreen::Gameplay);}
-    });
+    Request(TEXT("POST"),TEXT("/v2/shifts/")+ShiftId+TEXT("/actions"),Body,[this,Kind](auto Value){ApplyMutation(Value,Kind);});
 }
+
 TSharedPtr<FJsonObject> UVSMShiftSubsystem::CurrentTask() const
 {
     if(!State)return nullptr;const TArray<TSharedPtr<FJsonValue>>* Tasks=nullptr;
@@ -184,7 +220,7 @@ TSharedPtr<FJsonObject> UVSMShiftSubsystem::CurrentTask() const
 void UVSMShiftSubsystem::SelectPassenger(const FString& ActorId)
 {
     PassengerId=ActorId;TaskId.Empty();if(!State)return;const TArray<TSharedPtr<FJsonValue>>* Tasks=nullptr;
-    if(State->TryGetArrayField(TEXT("tasks"),Tasks))for(auto& T:*Tasks){auto O=T->AsObject();if(O && O->GetStringField(TEXT("actor_id"))==ActorId){TaskId=O->GetStringField(TEXT("id"));break;}}
+    if(State->TryGetArrayField(TEXT("tasks"),Tasks))for(auto& T:*Tasks){auto O=T->AsObject();if(O && O->GetStringField(TEXT("actor_id"))==ActorId && O->GetStringField(TEXT("status"))==TEXT("active")){TaskId=O->GetStringField(TEXT("id"));break;}}
     OnChanged.Broadcast();
 }
 FString UVSMShiftSubsystem::Field(const FString& Path) const
@@ -237,3 +273,92 @@ FString UVSMShiftSubsystem::ReportText() const
 
 
 
+FString UVSMShiftSubsystem::JournalSlot() const
+{
+    return TEXT("VSMShiftPending_")+FMD5::HashAnsiString(*(BaseUrl+TEXT("|")+UserId));
+}
+bool UVSMShiftSubsystem::SavePending()
+{
+    if(UserId.IsEmpty()||!PendingBody)return false;
+    auto* Journal=Cast<UVSMShiftJournal>(UGameplayStatics::CreateSaveGameObject(UVSMShiftJournal::StaticClass()));
+    Journal->UserId=UserId;Journal->BaseUrl=BaseUrl;Journal->Path=PendingPath;
+    FJsonSerializer::Serialize(PendingBody.ToSharedRef(),TJsonWriterFactory<>::Create(&Journal->Body));
+    return UGameplayStatics::SaveGameToSlot(Journal,JournalSlot(),0);
+}
+void UVSMShiftSubsystem::ClearPending()
+{
+    PendingBody.Reset();PendingReply=nullptr;bPendingRetry=false;
+    if(!UserId.IsEmpty())UGameplayStatics::DeleteGameInSlot(JournalSlot(),0);
+}
+void UVSMShiftSubsystem::RestorePending()
+{
+    if(!UGameplayStatics::DoesSaveGameExist(JournalSlot(),0))return;
+    auto* Journal=Cast<UVSMShiftJournal>(UGameplayStatics::LoadGameFromSlot(JournalSlot(),0));
+    TSharedPtr<FJsonObject> Body;
+    if(!Journal||Journal->UserId!=UserId||Journal->BaseUrl!=BaseUrl||!Journal->Path.StartsWith(TEXT("/v2/shifts"))||
+       !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Journal->Body),Body)||!Body||!Body->HasTypedField<EJson::String>(TEXT("clientActionId")))return;
+    PendingMethod=TEXT("POST");PendingPath=Journal->Path;PendingBody=Body;bPendingRetry=true;
+    FString Kind=TEXT("start");Body->TryGetStringField(TEXT("kind"),Kind);
+    PendingReply=[this,Kind](auto Value){ApplyMutation(Value,Kind);};
+}
+bool UVSMShiftSubsystem::HasActiveShift() const
+{
+    return State && State->GetStringField(TEXT("status"))==TEXT("active");
+}
+void UVSMShiftSubsystem::RecoverCurrentShift(bool bEnterGameplay)
+{
+    if(!bAuthenticated){Message=TEXT("Войдите, чтобы продолжить смену.");OnChanged.Broadcast();return;}
+    bEnterAfterRecovery=bEnterGameplay;
+    if(bPendingRetry){RetryPending();return;}
+    Request(TEXT("GET"),TEXT("/v2/shifts/current"),nullptr,[this,bEnterGameplay](auto Value)
+    {
+        const TSharedPtr<FJsonObject>* Shift=nullptr;
+        if(!Value->TryGetObjectField(TEXT("shift"),Shift))
+        {State.Reset();ShiftId.Empty();TaskId.Empty();Message=TEXT("Активной смены нет. Можно начать новую.");return;}
+        if(!Accept(*Shift))return;
+        const TArray<TSharedPtr<FJsonValue>>* Position=nullptr;
+        if((*Shift)->TryGetArrayField(TEXT("position"),Position)&&Position->Num()==3)
+            if(auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0))Pawn->SetActorLocation(FVector((*Position)[0]->AsNumber(),(*Position)[1]->AsNumber(),(*Position)[2]->AsNumber()),false,nullptr,ETeleportType::TeleportPhysics);
+        if(bEnterGameplay)if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Gameplay);
+    });
+}
+void UVSMShiftSubsystem::ApplyMutation(TSharedPtr<FJsonObject> Value,const FString& Kind)
+{
+    if(!Accept(Value)){bPendingRetry=PendingBody.IsValid();return;}
+    ClearPending();
+    auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0));
+    if(!PC||!HasActiveShift())return;
+    if(Kind==TEXT("start"))PC->Navigate(EVSMUIScreen::Gameplay);
+    if(Kind==TEXT("answer") && CurrentTask() && CurrentTask()->HasTypedField<EJson::Object>(TEXT("pending_action")))
+    {if(auto* P=Cast<AVSMPlayerCharacter>(PC->GetPawn()))P->SetFirstPerson(false);PC->Navigate(EVSMUIScreen::Gameplay);}
+}
+void UVSMShiftSubsystem::InteractWorldObject(const FString& WorldId,int32 Slot)
+{
+    if(!State)return;
+    const TArray<TSharedPtr<FJsonValue>>* Objects=nullptr;
+    if(!State->TryGetArrayField(TEXT("world_interactions"),Objects))return;
+    for(const auto& Entry:*Objects)
+    {
+        const auto Object=Entry->AsObject();
+        if(!Object || Object->GetStringField(TEXT("id"))!=WorldId || !Object->GetBoolField(TEXT("available")))continue;
+        if(Object->GetStringField(TEXT("kind"))==TEXT("station"))
+        {TaskId=Object->GetStringField(TEXT("task_id"));if(auto Task=CurrentTask())PassengerId=Task->GetStringField(TEXT("actor_id"));SendAction(TEXT("take_item"));}
+        else {SelectPassenger(WorldId);if(Slot>=0)SendAction(TEXT("give_item"),TEXT(""),Slot);}
+        return;
+    }
+}
+FVSMWorldView UVSMShiftSubsystem::GetWorldView(const FString& WorldId) const
+{
+    FVSMWorldView View;View.Id=WorldId;
+    const TArray<TSharedPtr<FJsonValue>>* Objects=nullptr;
+    if(!State||!State->TryGetArrayField(TEXT("world_interactions"),Objects))return View;
+    for(const auto& Entry:*Objects)
+    {
+        const auto Object=Entry->AsObject();FString Id;
+        if(!Object||!Object->TryGetStringField(TEXT("id"),Id)||Id!=WorldId)continue;
+        Object->TryGetStringField(TEXT("kind"),View.Kind);Object->TryGetStringField(TEXT("task_id"),View.TaskId);
+        Object->TryGetStringField(TEXT("item"),View.Item);Object->TryGetBoolField(TEXT("available"),View.bAvailable);Object->TryGetBoolField(TEXT("marker"),View.bMarker);
+        break;
+    }
+    return View;
+}
