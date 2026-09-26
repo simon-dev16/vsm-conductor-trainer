@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import uuid
+import math
 
 from inventory import acquire, empty_inventory, transfer
 from scenario_machine import Catalog, ScenarioError, response_score, shift_score
@@ -10,12 +11,29 @@ from scenario_machine import Catalog, ScenarioError, response_score, shift_score
 
 ROOT = Path(__file__).resolve().parents[1]
 RULES = json.loads((ROOT / 'Contracts/shift-rules.json').read_text(encoding='utf-8'))
-ITEM_ACTIONS = {
-    '46:offer_water_action': {'action': 'give_item', 'item': 'water', 'quantity': 1},
-    '46:offer_lemon_action': {'action': 'give_item', 'item': 'lemon', 'quantity': 1},
-    '15:offer_blanket': {'action': 'give_item', 'item': 'blanket', 'quantity': 1},
-    '15:offer_tea': {'action': 'give_item', 'item': 'tea', 'quantity': 1},
-}
+WORLD_ACTIONS = json.loads((ROOT / 'Contracts/world-actions.json').read_text(encoding='utf-8-sig'))
+
+
+def validate_world_actions(world):
+    try:
+        objects = [world['station']] + world['passengers']
+        if not world['passengers'] or len({o['id'] for o in objects}) != len(objects):
+            raise ValueError()
+        for obj in objects:
+            if not isinstance(obj['id'],str) or not obj['id'] or len(obj['position'])!=3:
+                raise ValueError()
+            if any(type(n) not in (int,float) or not math.isfinite(n) for n in obj['position']):
+                raise ValueError()
+            if type(obj['radius']) not in (int,float) or not 0<obj['radius']<=10000:
+                raise ValueError()
+        for binding in world['bindings'].values():
+            if binding['action']!='give_item' or binding['quantity']!=1 or not isinstance(binding['item'],str) or not binding['item']:
+                raise ValueError()
+    except (KeyError,TypeError,ValueError):
+        raise ScenarioError('Некорректная конфигурация предметных взаимодействий') from None
+
+
+validate_world_actions(WORLD_ACTIONS)
 
 
 class ShiftEngine:
@@ -33,7 +51,8 @@ class ShiftEngine:
                  'rules': deepcopy(RULES), 'safety': RULES['initial_safety'], 'loyalty': RULES['initial_loyalty'], 'inventory': empty_inventory(),
                  'tasks': [], 'events': [], 'assessments': [], 'position': [-180, 0, 100],
                  'tickets': self.tickets(), 'selected_task': '', 'rating': None,
-                 'content_version': self.catalog.version(), 'content_snapshot': self.catalog.snapshot()}
+                 'content_version': self.catalog.version(), 'content_snapshot': self.catalog.snapshot(),
+                 'world_actions': deepcopy(WORLD_ACTIONS)}
         self.spawn(value, situation_id, now)
         return value
 
@@ -54,7 +73,8 @@ class ShiftEngine:
     def spawn(self, value, situation_id, now):
         task = self.catalog.begin(situation_id)
         definition = self.catalog.situations[situation_id]
-        task.update({'id': str(uuid.uuid4()), 'actor_id': f"passenger_{len(value['tasks']) % 10 + 1:02}",
+        passengers = value.get('world_actions',WORLD_ACTIONS)['passengers']
+        task.update({'id': str(uuid.uuid4()), 'actor_id': passengers[len(value['tasks']) % len(passengers)]['id'],
                      'created_at': now, 'deadline': now + definition['timer_seconds'],
                      'reaction_seconds': None, 'timed_out': False, 'history': [], 'facts': {},
                      'text': definition['situation_description'], 'emotion': 'neutral'})
@@ -142,7 +162,7 @@ class ShiftEngine:
                 raise ScenarioError('Введите ответ до 4000 символов')
             context = self.catalog.classify_context(task, task['facts'], task['history'], text)
             decision = self.provider.classify(context)
-            updated = self.catalog.apply(task, decision, task['facts'], task['revision'], ITEM_ACTIONS)
+            updated = self.catalog.apply(task, decision, task['facts'], task['revision'], value.get('world_actions',WORLD_ACTIONS)['bindings'])
             updated['history'].append({'speaker': 'player', 'text': text, 'at': now, 'transition': decision['transition_id']})
             if decision['transition_id'] != 'NO_MATCH' and updated['reaction_seconds'] is None:
                 updated['reaction_seconds'] = max(0, now - task['created_at'])
@@ -162,16 +182,22 @@ class ShiftEngine:
         elif kind == 'take_item':
             if not task or not task.get('pending_action'):
                 raise ScenarioError('Нет запроса на предмет')
-            if sum((a-b)**2 for a,b in zip(value['position'], [-260, 240, 100])) > 240**2:
+            station = value.get('world_actions',WORLD_ACTIONS)['station']
+            if body.get('world_id',station['id']) != station['id']:
+                raise ScenarioError('Неверная станция')
+            if sum((a-b)**2 for a,b in zip(value['position'], station['position'])) > station['radius']**2:
                 raise ScenarioError('Подойдите к станции проводника')
             item = task['pending_action']['requirement']['item']
+            if any(slot and slot['item_id']==item for slot in value['inventory']):
+                raise ScenarioError('Этот предмет уже в инвентаре')
             value['inventory'] = acquire(value['inventory'], item, str(uuid.uuid4()))
         elif kind == 'give_item':
             if not task or not task.get('pending_action'):
                 raise ScenarioError('Нет ожидаемой передачи')
-            index = int(task['actor_id'].split('_')[1]) - 1
-            passenger_position = [120 + (index//2)*300, 118 if index%2 == 0 else -118, 90]
-            if sum((a-b)**2 for a,b in zip(value['position'], passenger_position)) > 300**2:
+            if body.get('actor_id',task['actor_id']) != task['actor_id']:
+                raise ScenarioError('Предмет предназначен другому пассажиру')
+            passenger = next(p for p in value.get('world_actions',WORLD_ACTIONS)['passengers'] if p['id']==task['actor_id'])
+            if sum((a-b)**2 for a,b in zip(value['position'], passenger['position'])) > passenger['radius']**2:
                 raise ScenarioError('Подойдите к пассажиру')
             required = task['pending_action']['requirement']
             slot = body.get('slot')
@@ -230,6 +256,21 @@ class ShiftEngine:
     def snapshot(self, current, now):
         value = deepcopy(current)
         value.pop('content_snapshot', None)
+        world = value.pop('world_actions',deepcopy(WORLD_ACTIONS))
+        value['world_interactions'] = []
+        for passenger in world['passengers']:
+            tasks = [t for t in value['tasks'] if t['actor_id']==passenger['id'] and t['status']=='active']
+            pending = next((t for t in tasks if t.get('pending_action')), None)
+            value['world_interactions'].append({'id':passenger['id'],'kind':'passenger','available':value['status']=='active',
+                'marker':bool(tasks),'task_id':tasks[0]['id'] if tasks else '',
+                'item':pending['pending_action']['requirement']['item'] if pending else '',
+                'position':passenger['position']})
+        waiting = [t for t in value['tasks'] if t.get('pending_action') and t['status']=='active']
+        pending = next((t for t in waiting if t['id']==value['selected_task']),waiting[0] if waiting else None)
+        item = pending['pending_action']['requirement']['item'] if pending else ''
+        available = bool(pending) and value['status']=='active' and not any(s and s['item_id']==item for s in value['inventory'])
+        value['world_interactions'].append({'id':world['station']['id'],'kind':'station','available':available,'marker':available,
+            'task_id':pending['id'] if pending else '', 'item':item,'position':world['station']['position']})
         value['server_time'] = now
         value['remaining_seconds'] = max(0, value['deadline'] - now)
         for task in value['tasks']:

@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "bindings": {
+    "46:offer_water_action": {"action":"give_item","item":"water","quantity":1},
+    "46:offer_lemon_action": {"action":"give_item","item":"lemon","quantity":1},
+    "15:offer_blanket": {"action":"give_item","item":"blanket","quantity":1},
+    "15:offer_tea": {"action":"give_item","item":"tea","quantity":1}
+  },
+  "station": {"id":"conductor_station","position":[-260,240,100],"radius":240},
+  "passengers": [
+    {"id":"passenger_01","position":[120,118,90],"radius":300},
+    {"id":"passenger_02","position":[120,-118,90],"radius":300},
+    {"id":"passenger_03","position":[420,118,90],"radius":300},
+    {"id":"passenger_04","position":[420,-118,90],"radius":300},
+    {"id":"passenger_05","position":[720,118,90],"radius":300},
+    {"id":"passenger_06","position":[720,-118,90],"radius":300},
+    {"id":"passenger_07","position":[1020,118,90],"radius":300},
+    {"id":"passenger_08","position":[1020,-118,90],"radius":300},
+    {"id":"passenger_09","position":[1320,118,90],"radius":300},
+    {"id":"passenger_10","position":[1320,-118,90],"radius":300}
+  ]
+}
