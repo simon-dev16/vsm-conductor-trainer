@@ -1,6 +1,7 @@
 import io
 import json
 import logging
+import os
 import sys
 import tempfile
 import threading
@@ -10,6 +11,7 @@ import urllib.error
 import urllib.request
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 import doctor
 from ai_provider import http_failure
@@ -154,6 +156,36 @@ class RequestLogTests(unittest.TestCase):
     def test_client_address_is_logged(self):
         lines=self.capture(lambda: self.request('/health'))
         self.assertTrue(lines.endswith('127.0.0.1'),lines)
+
+
+class BindTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.service=Service(Path(self.temp.name)/'test.db')
+    def tearDown(self):
+        self.temp.cleanup()
+    def test_loopback_only_by_default(self):
+        with patch.dict(os.environ,{},clear=False):
+            os.environ.pop('VSM_BIND',None)
+            server=make_server(self.service,0)
+        try:
+            self.assertEqual(server.server_address[0],'127.0.0.1')
+        finally:
+            server.server_close()
+    def test_bind_setting_is_honoured(self):
+        with patch.dict(os.environ,{'VSM_BIND':'0.0.0.0'}):
+            server=make_server(self.service,0)
+        try:
+            self.assertEqual(server.server_address[0],'0.0.0.0')
+        finally:
+            server.server_close()
+    def test_explicit_host_wins_over_setting(self):
+        with patch.dict(os.environ,{'VSM_BIND':'0.0.0.0'}):
+            server=make_server(self.service,0,'127.0.0.1')
+        try:
+            self.assertEqual(server.server_address[0],'127.0.0.1')
+        finally:
+            server.server_close()
 
 
 class HealthTests(unittest.TestCase):
