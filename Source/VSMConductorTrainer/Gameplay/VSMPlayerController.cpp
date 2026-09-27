@@ -74,8 +74,8 @@ void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
 {
     auto* Shift=GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>();
     if(NewScreen==EVSMUIScreen::Settings || NewScreen==EVSMUIScreen::Scenarios)NewScreen=EVSMUIScreen::Welcome;
-    if(!Shift->bAuthenticated && NewScreen!=EVSMUIScreen::Connection)NewScreen=EVSMUIScreen::Connection;
-    if(NewScreen==EVSMUIScreen::Gameplay && !Shift->HasActiveShift())NewScreen=EVSMUIScreen::Welcome;
+    if(!Shift->bAuthenticated && !Shift->bGuestMode && NewScreen!=EVSMUIScreen::Connection)NewScreen=EVSMUIScreen::Connection;
+    if(NewScreen==EVSMUIScreen::Gameplay && !Shift->HasActiveShift() && !Shift->bGuestMode)NewScreen=EVSMUIScreen::Welcome;
     if(NewScreen==EVSMUIScreen::Welcome && Shift->HasActiveShift())
     {
         if(auto* HUD=Cast<AVSMHUD>(GetHUD()))

@@ -62,6 +62,7 @@ private:
     UFUNCTION() void Logout();
     UFUNCTION() void CloseInfo();
     UFUNCTION() void CloseToGameplay();
+    UFUNCTION() void EnterGuestMode();
     void UpdateJoystick(const FGeometry& Geometry,const FVector2D& Position,const FVector2D& Origin);
     void ResetJoystick();
     int32 MoveFinger=INDEX_NONE;
