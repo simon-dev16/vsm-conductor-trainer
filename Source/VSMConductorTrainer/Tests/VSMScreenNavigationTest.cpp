@@ -20,7 +20,7 @@ class FScreeNavigation : public IAutomationLatentCommand
     int32 Step=0;
     double Started=FPlatformTime::Seconds();
     UVSMShiftSubsystem* Shift=nullptr;
-    FString GaugesBefore,ProfileBefore,BoardBefore;
+    FString GaugesBefore,BoardBefore;
     static UVSMWidget* Root(AVSMPlayerController* PC)
     {
         auto* HUD=Cast<AVSMHUD>(PC->GetHUD());
@@ -84,10 +84,9 @@ public:
             Test->TestTrue(TEXT("Shift survives ticket check"),Shift->HasActiveShift());
             Test->TestFalse(TEXT("No pending retry after ticket check"),Shift->bPendingRetry);
             PC->Navigate(EVSMUIScreen::Profile);
-            ProfileBefore=Shift->Field(TEXT("profile.summary"));
             ++Step;return false;
         case 4:
-            Test->TestTrue(TEXT("Profile request replaced the placeholder"),Shift->Field(TEXT("profile.summary"))!=ProfileBefore);
+            Test->TestTrue(TEXT("Profile contains the authenticated user's name"),Shift->Field(TEXT("profile.display_name"))!=TEXT("—") && Shift->Field(TEXT("profile.summary")).Contains(Shift->Field(TEXT("profile.display_name"))));
             if(!Bound(PC,TEXT("Activity"),TEXT("profile.activity")))return true;
             if(!Bound(PC,TEXT("StatusText"),TEXT("connection")))return true;
             PC->Navigate(EVSMUIScreen::Leaderboard);

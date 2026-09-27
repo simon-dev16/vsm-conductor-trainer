@@ -19,7 +19,8 @@ bool UVSMWidgetEditorTools::CompileScreen(UObject* WidgetBlueprint)
     if (!BP) return false;
     BP->Modify();
     TSet<FName> LiveVariableNames;
-    BP->ForEachSourceWidget([&](UWidget* Widget)
+    if(!BP->WidgetTree)return false;
+    BP->WidgetTree->ForEachWidget([&](UWidget* Widget)
     {
         if (!Widget) return;
         const FName Name = Widget->GetFName();

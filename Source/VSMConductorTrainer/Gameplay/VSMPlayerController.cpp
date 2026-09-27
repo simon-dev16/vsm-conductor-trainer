@@ -86,7 +86,7 @@ void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
     for (TActorIterator<AActor> It(GetWorld());It;++It)
         if(It->ActorHasTag(TEXT("VSM.DialogueOnly"))) It->SetActorHiddenInGame(false);
     if (auto* Conductor=Cast<AVSMPlayerCharacter>(GetPawn())) Conductor->SetVirtualMovement(FVector2D::ZeroVector);
-    if (NewScreen!=EVSMUIScreen::Dialogue && DialogueActor.IsValid())
+    if (NewScreen!=EVSMUIScreen::Dialogue && NewScreen!=EVSMUIScreen::Guide && NewScreen!=EVSMUIScreen::Tutorial && DialogueActor.IsValid())
     {
         DialogueActor.Reset();
         SetViewTargetWithBlend(GetPawn(),.3f);
@@ -96,6 +96,7 @@ void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
     SetMenuOpen(NewScreen!=EVSMUIScreen::Gameplay);
     if(auto* HUD=Cast<AVSMHUD>(GetHUD()))HUD->ShowScreen(NewScreen);
     if(NewScreen==EVSMUIScreen::Profile)Shift->LoadProfile();
+    if(NewScreen==EVSMUIScreen::Leaderboard)Shift->LoadLeaderboard();
 }
 void AVSMPlayerController::CloseInfo() { Navigate(InfoReturnScreen==EVSMUIScreen::Gameplay || InfoReturnScreen==EVSMUIScreen::Dialogue ? InfoReturnScreen : EVSMUIScreen::Welcome); }
 void AVSMPlayerController::HandleSessionCleared() { Navigate(EVSMUIScreen::Connection); }
