@@ -55,8 +55,7 @@ public:
         {
         case 0:
         {
-            PC->Navigate(EVSMUIScreen::Welcome);
-            if(!Click(PC,TEXT("LoginButton")))return true;
+            if(!Test->TestTrue(TEXT("Login is the first screen"),PC->GetScreen()==EVSMUIScreen::Connection))return true;
             auto* Widget=Root(PC);
             Widget->WriteInput(TEXT("LoginInput"),TEXT("fixture"));Widget->WriteInput(TEXT("PasswordInput"),TEXT("fixture-password"));
             if(!Click(PC,TEXT("LoginButton")))return true;
@@ -64,7 +63,7 @@ public:
         }
         case 1:
             if(!Test->TestTrue(TEXT("Fixture authentication"),Shift->bAuthenticated))return true;
-            if(!Click(PC,TEXT("TrainWater")))return true;
+            if(!Click(PC,TEXT("PlayButton")))return true;
             ++Step;return false;
         case 2:
         {
@@ -86,7 +85,6 @@ public:
             Test->TestFalse(TEXT("No pending retry after ticket check"),Shift->bPendingRetry);
             PC->Navigate(EVSMUIScreen::Profile);
             ProfileBefore=Shift->Field(TEXT("profile.summary"));
-            if(!Click(PC,TEXT("RefreshButton")))return true;
             ++Step;return false;
         case 4:
             Test->TestTrue(TEXT("Profile request replaced the placeholder"),Shift->Field(TEXT("profile.summary"))!=ProfileBefore);
@@ -100,33 +98,30 @@ public:
             Test->TestTrue(TEXT("Leaderboard request replaced the placeholder"),Shift->Field(TEXT("leaderboard"))!=BoardBefore);
             if(!Bound(PC,TEXT("LeaderboardText"),TEXT("leaderboard")))return true;
             PC->Navigate(EVSMUIScreen::Gameplay);
-            // The perspective button only proves itself if the boom really follows
-            // the mode, not just that a handler exists.
             {
                 auto* Conductor=Cast<AVSMPlayerCharacter>(PC->GetPawn());
-                const bool bFirstBefore=Conductor?Conductor->bFirstPerson:false;
-                if(!Click(PC,TEXT("Camera")))return true;
-                if(!Test->TestTrue(TEXT("Camera button toggles the perspective"),Conductor&&Conductor->bFirstPerson!=bFirstBefore))return true;
-                if(!Test->TestTrue(TEXT("Camera boom follows the perspective"),
-                    Conductor&&(Conductor->bFirstPerson?Conductor->CameraBoom->TargetArmLength==0.f
-                                                        :Conductor->CameraBoom->TargetArmLength==Conductor->ThirdPersonDistance)))return true;
+                if(!Test->TestTrue(TEXT("Gameplay remains first person"),Conductor&&Conductor->bFirstPerson&&Conductor->CameraBoom->TargetArmLength==0.f))return true;
+                auto* CameraButton=Root(PC)->GetWidgetFromName(TEXT("Camera"));
+                if(!Test->TestTrue(TEXT("No camera toggle on HUD"),!CameraButton || !CameraButton->GetParent()))return true;
             }
             if(!Click(PC,TEXT("HelpButton")))return true;
             if(!Test->TestTrue(TEXT("HelpButton opens tutorial"),PC->GetScreen()==EVSMUIScreen::Tutorial))return true;
             ++Step;return false;
         case 6:
             if(!Click(PC,TEXT("BackButton")))return true;
-            if(!Test->TestTrue(TEXT("Tutorial back returns to main menu"),PC->GetScreen()==EVSMUIScreen::Welcome))return true;
-            PC->Navigate(EVSMUIScreen::Gameplay);
-            if(!Click(PC,TEXT("SettingsButton")))return true;
-            if(!Test->TestTrue(TEXT("SettingsButton opens settings"),PC->GetScreen()==EVSMUIScreen::Settings))return true;
+            if(!Test->TestTrue(TEXT("Tutorial close returns to gameplay"),PC->GetScreen()==EVSMUIScreen::Gameplay))return true;
+            if(!Click(PC,TEXT("OpenDocuments")))return true;
+            if(!Test->TestTrue(TEXT("Documents open from gameplay"),PC->GetScreen()==EVSMUIScreen::TicketCheck))return true;
+            if(!Click(PC,TEXT("BackButton")))return true;
+            if(!Click(PC,TEXT("Menu")))return true;
+            if(!Click(PC,TEXT("ExitNo")))return true;
+            if(!Test->TestTrue(TEXT("Declining exit keeps shift active"),Shift->HasActiveShift()))return true;
+            if(!Click(PC,TEXT("Menu")))return true;
+            if(!Click(PC,TEXT("ExitYes")))return true;
             ++Step;return false;
         case 7:
-            if(!Click(PC,TEXT("BackButton")))return true;
-            if(!Test->TestTrue(TEXT("Settings back returns to main menu"),PC->GetScreen()==EVSMUIScreen::Welcome))return true;
-            PC->Navigate(EVSMUIScreen::Results);
-            if(!Bound(PC,TEXT("ReportText"),TEXT("report")))return true;
-            if(!Bound(PC,TEXT("StatusText"),TEXT("connection")))return true;
+            if(!Test->TestTrue(TEXT("Confirmed exit returns to main menu"),PC->GetScreen()==EVSMUIScreen::Welcome))return true;
+            if(!Test->TestFalse(TEXT("Confirmed exit ends the shift"),Shift->HasActiveShift()))return true;
             ++Step;return false;
         default:
             Test->TestTrue(TEXT("All screens navigated without pending action"),!Shift->bPendingRetry);return true;

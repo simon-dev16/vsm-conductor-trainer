@@ -92,7 +92,7 @@ class ShiftStore:
             salt = bytes.fromhex(user['salt']) if user else bytes(16)
             digest = hashlib.pbkdf2_hmac('sha256',password.encode(),salt,600000).hex()
             if not user or not hmac.compare_digest(digest,user['digest']):
-                raise ApiError(401,'invalid_login','Неверный логин или пароль.')
+                raise ApiError(401,'invalid_login','Логин или пароль неверный.')
             token=secrets.token_urlsafe(32)
             db.execute('DELETE FROM v2_sessions WHERE expires<?',(self.clock(),))
             db.execute('INSERT INTO v2_sessions VALUES(?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),user['id'],self.clock()+86400))

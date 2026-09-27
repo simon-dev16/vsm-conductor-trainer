@@ -20,10 +20,8 @@ public:
     virtual void PawnClientRestart() override;
     virtual void Tick(float DeltaSeconds) override;
     UFUNCTION(BlueprintCallable, Category="VSM|Camera") void SetFirstPerson(bool bEnabled);
-    UFUNCTION(BlueprintCallable, Category="VSM|Camera") void TogglePerspective() { SetFirstPerson(!bFirstPerson); }
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void AddViewInput(FVector2D Axis);
-    UPROPERTY(BlueprintReadOnly, Category="VSM|Camera") bool bFirstPerson=false;
-    UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|Camera") float ThirdPersonDistance=240.f;
+    UPROPERTY(BlueprintReadOnly, Category="VSM|Camera") bool bFirstPerson=true;
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|Camera") float LookSensitivity=1.f;
     UFUNCTION(BlueprintImplementableEvent, Category="VSM|Camera") void OnPerspectiveChanged(bool bIsFirstPerson);
     UFUNCTION(BlueprintCallable, Category="VSM|Input") void SetVirtualMovement(FVector2D Axis) { VirtualMovement=Axis.SizeSquared()>1.0 ? Axis.GetSafeNormal() : Axis; }

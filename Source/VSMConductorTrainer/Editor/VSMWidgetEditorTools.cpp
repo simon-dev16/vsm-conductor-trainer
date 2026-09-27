@@ -10,6 +10,8 @@
 #include "Animation/WidgetAnimation.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "K2Node_ComponentBoundEvent.h"
+#include "EdGraph/EdGraph.h"
 
 bool UVSMWidgetEditorTools::CompileScreen(UObject* WidgetBlueprint)
 {
@@ -33,6 +35,12 @@ bool UVSMWidgetEditorTools::CompileScreen(UObject* WidgetBlueprint)
         const FGuid* Existing = BP->WidgetVariableNameToGuidMap.Find(Name);
         if (!Existing || !Existing->IsValid()) BP->WidgetVariableNameToGuidMap.Add(Name, FGuid::NewGuid());
     }
+    TArray<UEdGraphNode*> ObsoleteEvents;
+    for (UEdGraph* Graph : BP->UbergraphPages)
+        if (Graph) for (UEdGraphNode* Node : Graph->Nodes)
+            if (const auto* Event = Cast<UK2Node_ComponentBoundEvent>(Node))
+                if (!LiveVariableNames.Contains(Event->GetComponentPropertyName())) ObsoleteEvents.Add(Node);
+    for (UEdGraphNode* Node : ObsoleteEvents) FBlueprintEditorUtils::RemoveNode(BP, Node, true);
     for (auto It = BP->WidgetVariableNameToGuidMap.CreateIterator(); It; ++It)
     {
         if (!LiveVariableNames.Contains(It.Key())) It.RemoveCurrent();

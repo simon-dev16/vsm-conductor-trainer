@@ -16,7 +16,7 @@ from unittest.mock import patch
 import doctor
 from ai_provider import http_failure
 from server import make_server
-from service import Service
+from shift_store import ShiftStore
 
 
 class HttpReasonTests(unittest.TestCase):
@@ -101,8 +101,8 @@ class _Collector(logging.Handler):
 class RequestLogTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
-        self.service=Service(Path(self.temp.name)/'test.db')
-        self.server=make_server(self.service,0)
+        self.store=ShiftStore(Path(self.temp.name)/'test.db')
+        self.server=make_server(self.store,0)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()
         self.base=f'http://127.0.0.1:{self.server.server_address[1]}'
@@ -161,27 +161,27 @@ class RequestLogTests(unittest.TestCase):
 class BindTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
-        self.service=Service(Path(self.temp.name)/'test.db')
+        self.store=ShiftStore(Path(self.temp.name)/'test.db')
     def tearDown(self):
         self.temp.cleanup()
     def test_loopback_only_by_default(self):
         with patch.dict(os.environ,{},clear=False):
             os.environ.pop('VSM_BIND',None)
-            server=make_server(self.service,0)
+            server=make_server(self.store,0)
         try:
             self.assertEqual(server.server_address[0],'127.0.0.1')
         finally:
             server.server_close()
     def test_bind_setting_is_honoured(self):
         with patch.dict(os.environ,{'VSM_BIND':'0.0.0.0'}):
-            server=make_server(self.service,0)
+            server=make_server(self.store,0)
         try:
             self.assertEqual(server.server_address[0],'0.0.0.0')
         finally:
             server.server_close()
     def test_explicit_host_wins_over_setting(self):
         with patch.dict(os.environ,{'VSM_BIND':'0.0.0.0'}):
-            server=make_server(self.service,0,'127.0.0.1')
+            server=make_server(self.store,0,'127.0.0.1')
         try:
             self.assertEqual(server.server_address[0],'127.0.0.1')
         finally:
@@ -192,8 +192,8 @@ class HealthTests(unittest.TestCase):
     def test_health_reports_whether_ai_is_configured(self):
         temp=tempfile.TemporaryDirectory()
         try:
-            service=Service(Path(temp.name)/'test.db')
-            server=make_server(service,0)
+            store=ShiftStore(Path(temp.name)/'test.db')
+            server=make_server(store,0)
             thread=threading.Thread(target=server.serve_forever,daemon=True)
             thread.start()
             try:

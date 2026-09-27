@@ -20,6 +20,7 @@ public:
     UFUNCTION(BlueprintNativeEvent,Category="VSM") void PresentTask(const FVSMWorldView& View);
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM") TObjectPtr<UVSMWorldPresenter> WorldPresenter;
     virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VSM|Passenger") FString PassengerId=TEXT("passenger_01");
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VSM|Passenger") FText DisplayName;
@@ -33,4 +34,7 @@ public:
     virtual FText GetInteractionLabel_Implementation() const override;
     virtual void Interact_Implementation(AActor* Interactor) override;
     virtual bool ApplyPresentationCommand_Implementation(const FVSMPresentationCommandDto& Command,AActor* Target,FString& OutReason) override;
+private:
+    void UpdateTaskMarker();
+    float TaskMarkerElapsed=0.f;
 };
