@@ -9,6 +9,6 @@ public class VSMConductorTrainer : ModuleRules
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "DeveloperSettings", "UMG" });
         PrivateDependencyModuleNames.AddRange(new[] { "HTTP", "Json", "Slate", "SlateCore", "AudioCaptureCore" });
         if (Target.Platform == UnrealTargetPlatform.Android) PrivateDependencyModuleNames.Add("AndroidPermission");
-        if (Target.bBuildEditor) PrivateDependencyModuleNames.Add("UnrealEd");
+        if (Target.bBuildEditor) PrivateDependencyModuleNames.AddRange(new[] { "UnrealEd", "UMGEditor" });
     }
 }

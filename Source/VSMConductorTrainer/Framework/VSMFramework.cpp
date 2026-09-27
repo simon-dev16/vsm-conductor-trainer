@@ -15,6 +15,12 @@ AVSMPlayerController* UVSMWidget::GetConductorController() const
     return Cast<AVSMPlayerController>(GetOwningPlayer());
 }
 UVSMShiftSubsystem* UVSMWidget::GetShift() const {return GetGameInstance()?GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>():nullptr;}
+void UVSMWidget::NativeConstruct()
+{
+    Super::NativeConstruct();
+    if(auto* Shift=GetShift())Shift->OnChanged.AddUniqueDynamic(this,&UVSMWidget::RefreshBindings);
+    RefreshBindings();
+}
 FString UVSMWidget::ReadInput(FName WidgetName) const
 {
     if(auto* Box=Cast<UEditableTextBox>(GetWidgetFromName(WidgetName)))return Box->GetText().ToString();
@@ -24,6 +30,14 @@ FString UVSMWidget::ReadInput(FName WidgetName) const
 void UVSMWidget::RefreshBindings()
 {
     auto* Shift=GetShift();if(!Shift)return;
+    for(const auto& Pair:EnabledBindings)if(auto* Widget=GetWidgetFromName(Pair.Key))
+    {
+        bool Enabled=!Shift->bBusy;
+        if(Pair.Value==TEXT("action"))Enabled&=Shift->HasActiveShift()&&!Shift->bPendingRetry;
+        else if(Pair.Value==TEXT("retry"))Enabled&=Shift->bPendingRetry;
+        else if(Pair.Value==TEXT("start"))Enabled&=Shift->bAuthenticated&&!Shift->bPendingRetry;
+        Widget->SetIsEnabled(Enabled);
+    }
     for(auto& Pair:TextBindings)if(auto* Text=Cast<UTextBlock>(GetWidgetFromName(Pair.Key)))
     {
         FString Value;
@@ -42,6 +56,8 @@ void UVSMWidget::WriteInput(FName WidgetName,const FString& Text)
 void UVSMWidget::MoveInput(FVector2D Axis){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->SetVirtualMovement(Axis);}
 void UVSMWidget::ViewInput(FVector2D Axis){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->AddViewInput(Axis);}
 void UVSMWidget::ToggleCamera(){if(auto* C=Cast<AVSMPlayerCharacter>(GetOwningPlayerPawn()))C->TogglePerspective();}
+void UVSMWidget::Navigate(EVSMUIScreen NewScreen){if(auto* PC=GetConductorController())PC->Navigate(NewScreen);}
+void UVSMWidget::StartScenario(int32 SituationId,bool bRanked){if(auto* Shift=GetShift())Shift->StartShift(bRanked,SituationId);}
 FReply UVSMWidget::NativeOnTouchStarted(const FGeometry& G,const FPointerEvent& E)
 {
     auto* PC=GetConductorController();if(!PC||PC->GetScreen()!=EVSMUIScreen::Gameplay)return FReply::Unhandled();
@@ -63,4 +79,4 @@ FReply UVSMWidget::NativeOnTouchEnded(const FGeometry& G,const FPointerEvent& E)
     if(E.GetPointerIndex()==LookFinger){LookFinger=INDEX_NONE;return FReply::Handled();}
     return FReply::Unhandled();
 }
-void UVSMWidget::NativeDestruct(){MoveInput(FVector2D::ZeroVector);MoveFinger=LookFinger=INDEX_NONE;Super::NativeDestruct();}
+void UVSMWidget::NativeDestruct(){if(auto* Shift=GetShift())Shift->OnChanged.RemoveDynamic(this,&UVSMWidget::RefreshBindings);MoveInput(FVector2D::ZeroVector);MoveFinger=LookFinger=INDEX_NONE;Super::NativeDestruct();}

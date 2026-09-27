@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Containers/Ticker.h"
+#include "Scenario/VSMWorldView.h"
 #include "VSMShiftSubsystem.generated.h"
 class FJsonObject;
 namespace Audio { class FAudioCapture; }
@@ -30,6 +31,11 @@ public:
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void StartShift(bool bRanked,int32 SituationId=46);
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RefreshShift();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RetryPending();
+    UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RecoverCurrentShift(bool bEnterGameplay=true);
+    UFUNCTION(BlueprintPure, Category="VSM|Shift") bool HasActiveShift() const;
+    UFUNCTION(BlueprintPure, Category="VSM|Shift") FString GetShiftId() const {return ShiftId;}
+    UFUNCTION(BlueprintCallable, Category="VSM|World") void InteractWorldObject(const FString& WorldId,int32 Slot=-1);
+    UFUNCTION(BlueprintPure, Category="VSM|World") FVSMWorldView GetWorldView(const FString& WorldId) const;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") bool bPendingRetry=false;
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SendAction(const FString& Kind,const FString& Text=TEXT(""),int32 Slot=0,bool bAccept=true);
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void LoadProfile();
@@ -48,12 +54,19 @@ public:
 private:
     using FReply=TFunction<void(TSharedPtr<FJsonObject>)>;
     void Request(const FString& Method,const FString& Path,TSharedPtr<FJsonObject> Body,FReply Callback);
-    void Accept(TSharedPtr<FJsonObject> Value);
+    bool Accept(TSharedPtr<FJsonObject> Value);
+    void ApplyMutation(TSharedPtr<FJsonObject> Value,const FString& Kind);
+    bool SavePending();
+    void ClearPending();
+    void RestorePending();
+    FString JournalSlot() const;
     TSharedPtr<FJsonObject> CurrentTask() const;
     TSharedPtr<FJsonObject> State;
     TSharedPtr<FJsonObject> Profile;
     TSharedPtr<FJsonObject> Leaderboard;
     FString Token;
+    FString UserId;
+    bool bEnterAfterRecovery=false;
     FString BaseUrl;
     FString ShiftId;
     FString TaskId;

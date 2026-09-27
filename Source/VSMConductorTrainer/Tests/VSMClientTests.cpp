@@ -34,7 +34,7 @@
 
 namespace
 {
-constexpr uint32 Flags=EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
+constexpr EAutomationTestFlags Flags=EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter;
 struct FTestSession
 {
     UGameInstance* Instance=nullptr;

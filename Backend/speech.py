@@ -4,6 +4,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from ai_provider import http_failure
 from domain import ApiError
 
 
@@ -31,7 +32,8 @@ def transcribe(body):
         return {'text':text}
     except urllib.error.HTTPError as exc:
         status=exc.code;exc.close()
-        raise ApiError(503,'speech_provider_error',f'Распознавание вернуло HTTP {status}.') from None
+        code,message=http_failure(status,'speech','Распознавание')
+        raise ApiError(503,code,message) from None
     except (urllib.error.URLError,TimeoutError):
         raise ApiError(503,'speech_unavailable','Распознавание недоступно. Используйте текст.') from None
     except (ValueError,KeyError,TypeError):

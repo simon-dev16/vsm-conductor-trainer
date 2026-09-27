@@ -36,7 +36,7 @@ bool Scores(const TSharedPtr<FJsonObject>& O, const TCHAR* Key, TMap<FString,flo
     {
         double Value;
         if (Pair.Key.IsEmpty() || !Pair.Value->TryGetNumber(Value) || !FMath::IsFinite(Value) || Value < 0 || Value > 100) return false;
-        Out.Add(Pair.Key, float(Value));
+        Out.Add(FString(Pair.Key.ToView()), float(Value));
     }
     return true;
 }

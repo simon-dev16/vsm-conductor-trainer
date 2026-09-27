@@ -1,4 +1,5 @@
 #include "Passengers/VSMPassengerCharacter.h"
+#include "Scenario/VSMWorldPresenter.h"
 #include "Scenario/VSMActorRegistrySubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,6 +12,7 @@
 AVSMPassengerCharacter::AVSMPassengerCharacter()
 {
     PrimaryActorTick.bCanEverTick=false;
+    WorldPresenter=CreateDefaultSubobject<UVSMWorldPresenter>(TEXT("WorldPresenter"));
     DisplayName=FText::FromString(TEXT("Passenger"));
     GetCapsuleComponent()->InitCapsuleSize(34.f,88.f);
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility,ECR_Block);
@@ -67,6 +69,13 @@ void AVSMPassengerCharacter::BeginPlay()
     GetWorld()->GetSubsystem<UVSMActorRegistrySubsystem>()->RegisterActor(PassengerId,this);
     TaskMarker->SetText(DisplayName);
     TaskMarker->SetVisibility(false);
+    WorldPresenter->OnViewChanged.AddDynamic(this,&AVSMPassengerCharacter::PresentTask);
+    PresentTask(WorldPresenter->View);
+}
+void AVSMPassengerCharacter::PresentTask_Implementation(const FVSMWorldView& View)
+{
+    bHasTask=View.bMarker;TaskMarker->SetVisibility(View.bMarker);
+    TaskMarker->SetText(FText::FromString(View.Item.IsEmpty()?TEXT("!"):View.Item));
 }
 void AVSMPassengerCharacter::EndPlay(const EEndPlayReason::Type Reason)
 {

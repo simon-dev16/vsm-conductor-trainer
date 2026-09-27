@@ -1,3 +1,3 @@
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Tools\Launch.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Tools\Launch.ps1" %*
 if errorlevel 1 pause

@@ -1,4 +1,4 @@
-param([switch]$Portrait,[switch]$Packaged,[string]$EngineRoot='C:\Program Files\Epic Games\UE_5.4')
+param([switch]$Portrait,[switch]$Packaged,[string]$EngineRoot='C:\Program Files\Epic Games\UE_5.8')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 $label=if($Portrait){'Portrait'}else{'Landscape'}

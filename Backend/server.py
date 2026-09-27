@@ -34,6 +34,10 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def respond(self,status,value):
+        self.status_code=status
+        if isinstance(value,dict):
+            code=(value.get('error') or {}).get('code')
+            if code: self.error_code=code
         raw=json.dumps(value,ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header('Content-Type','application/json; charset=utf-8')
@@ -48,6 +52,8 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self):
         started=time.monotonic()
         path=urlsplit(self.path).path
+        self.status_code=0
+        self.error_code=''
         try:
             with self.server.rate_lock:
                 now=time.monotonic()
@@ -93,6 +99,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.respond(200,store.leaderboard(user_id,path.rsplit('/',1)[1]))
                 if self.command=='POST' and path=='/v2/shifts':
                     return self.respond(201,store.start(user_id,body))
+                if self.command=='GET' and path=='/v2/shifts/current':
+                    return self.respond(200,store.current(user_id))
                 parts=path.strip('/').split('/')
                 if len(parts)==3 and parts[:2]==['v2','shifts'] and self.command=='GET':
                     return self.respond(200,store.get(user_id,parts[2]))
@@ -118,18 +126,24 @@ class Handler(BaseHTTPRequestHandler):
             self.respond(exc.status,{'error':{'code':exc.code,'message':str(exc)}})
         except (TimeoutError,ConnectionError):
             return
-        except Exception:
-            logging.error('Internal error in %s %s',self.command,path)
+        except Exception as exc:
+            # Тело ответа провайдера сюда не попадает, но ключ может лежать в аргументах исключения,
+            # поэтому трейсбек печатается только по явному запросу.
+            logging.error('Internal error in %s %s: %s',self.command,path,type(exc).__name__)
+            if os.getenv('VSM_LOG_TRACEBACK'):
+                logging.exception('Traceback for %s %s',self.command,path)
             self.respond(500,{'error':{'code':'internal_error','message':'Внутренняя ошибка сервера.'}})
         finally:
-            logging.info('%s %s %.3fs',self.command,path,time.monotonic()-started)
+            logging.info('%s %s -> %d%s %.3fs %s',self.command,path,self.status_code or 0,
+                         f' {self.error_code}' if self.error_code else '',
+                         time.monotonic()-started,self.client_address[0])
 
     do_GET=dispatch
     do_POST=dispatch
 
 
-def make_server(service,port=18767):
-    server=ThreadingHTTPServer(('127.0.0.1',port),Handler)
+def make_server(service,port=18767,host=None):
+    server=ThreadingHTTPServer((host or os.getenv('VSM_BIND','127.0.0.1'),port),Handler)
     server.service=service
     server.shift_store=ShiftStore(os.getenv('VSM_SHIFT_DATABASE',service.path+'.shifts'))
     server.rate_lock=threading.Lock()
@@ -148,5 +162,8 @@ if __name__=='__main__':
     if os.getenv('VSM_DEMO_PASSWORD'):
         service.create_demo_user(os.environ['VSM_DEMO_PASSWORD'])
     server=make_server(service,int(os.getenv('VSM_PORT','18767')))
-    logging.info('VSM backend: http://127.0.0.1:%d. No provider calls until a run is requested.',server.server_address[1])
+    bound=server.server_address
+    logging.info('VSM backend: http://%s:%d. No provider calls until a run is requested.',*bound)
+    if bound[0]=='127.0.0.1':
+        logging.info('Слушаю только локальный адрес. Для телефона поставь VSM_BIND=0.0.0.0 в Backend/.env.')
     server.serve_forever()

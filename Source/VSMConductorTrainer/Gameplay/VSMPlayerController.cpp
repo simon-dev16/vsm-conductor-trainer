@@ -31,6 +31,7 @@ void AVSMPlayerController::OnPossess(APawn* InPawn)
 }
 void AVSMPlayerController::HandleInteraction(AActor* Actor)
 {
+    if(!Cast<AVSMPassengerCharacter>(Actor))return;
     DialogueActor=Actor;
     if(auto* Passenger=Cast<AVSMPassengerCharacter>(Actor))GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->SelectPassenger(Passenger->PassengerId);
     if (!DialogueCamera) DialogueCamera=GetWorld()->SpawnActor<ACameraActor>();
@@ -67,6 +68,8 @@ void AVSMPlayerController::HandleRunUpdated(const FVSMRunDto& Run)
 }
 void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
 {
+    if(NewScreen==EVSMUIScreen::Gameplay && (!GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->HasActiveShift() || GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->bPendingRetry))
+    {GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->RecoverCurrentShift(true);return;}
     if(NewScreen==EVSMUIScreen::Scenarios || NewScreen==EVSMUIScreen::Profile || NewScreen==EVSMUIScreen::Leaderboard)
         if(!GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->bAuthenticated)NewScreen=EVSMUIScreen::Connection;
     for (TActorIterator<AActor> It(GetWorld());It;++It)

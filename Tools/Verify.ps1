@@ -1,4 +1,4 @@
-param([string]$EngineRoot='C:\Program Files\Epic Games\UE_5.4')
+param([string]$EngineRoot='C:\Program Files\Epic Games\UE_5.8')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 $project=Join-Path $projectRoot 'VSMConductorTrainer.uproject'
