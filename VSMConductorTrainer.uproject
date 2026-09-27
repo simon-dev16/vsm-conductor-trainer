@@ -1,59 +1,61 @@
 {
-	"FileVersion": 3,
-	"EngineAssociation": "{296C7FEF-4EB9-24B1-92A6-82A03D85A73E}",
-	"Category": "Training",
-	"Description": "High-speed railway conductor training foundation",
-	"Modules": [
-		{
-			"Name": "VSMConductorTrainer",
-			"Type": "Runtime",
-			"LoadingPhase": "Default"
-		}
-	],
-	"Plugins": [
-		{
-			"Name": "EnhancedInput",
-			"Enabled": true
-		},
-		{
-			"Name": "PythonScriptPlugin",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
-		},
-		{
-			"Name": "EditorScriptingUtilities",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
-		},
-		{
-			"Name": "AudioCapture",
-			"Enabled": true
-		},
-		{
-			"Name": "AndroidPermission",
-			"Enabled": true
-		},
-		{
-			"Name": "ModelContextProtocol",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
-		},
-		{
-			"Name": "AllToolsets",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
-		}
-	],
-	"TargetPlatforms": [
-		"Windows",
-		"Android"
-	]
+  "FileVersion": 3,
+  "EngineAssociation": "5.8",
+  "Category": "Training",
+  "Description": "High-speed railway conductor training foundation",
+  "Modules": [
+    {
+      "Name": "VSMConductorTrainer",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    },
+    {
+      "Name": "PythonScriptPlugin",
+      "Enabled": true,
+      "TargetAllowList": ["Editor"]
+    },
+    {
+      "Name": "EditorScriptingUtilities",
+      "Enabled": true,
+      "TargetAllowList": ["Editor"]
+    },
+    {
+      "Name": "AudioCapture",
+      "Enabled": true
+    },
+    {
+      "Name": "AndroidPermission",
+      "Enabled": true
+    },
+    {
+      "Name": "ModelContextProtocol",
+      "Enabled": true,
+      "TargetAllowList": ["Editor"]
+    },
+    {
+      "Name": "AllToolsets",
+      "Enabled": true,
+      "TargetAllowList": ["Editor"]
+    },
+    {
+      "Name": "LiveLink",
+      "Enabled": true
+    },
+    {
+      "Name": "LiveLinkControlRig",
+      "Enabled": true
+    },
+    {
+      "Name": "AppleARKitFaceSupport",
+      "Enabled": true,
+      "SupportedTargetPlatforms": ["IOS", "Win64", "Mac", "Linux", "Android"]
+    }
+  ],
+  "TargetPlatforms": ["Windows", "Android"]
 }

@@ -42,7 +42,7 @@ void AVSMPlayerController::HandleInteraction(AActor* Actor)
     if (DialogueCamera && GetPawn())
     {
         const FVector Eye=GetPawn()->GetActorLocation()+FVector(0,0,60);
-        const FVector Face=Actor->GetActorLocation()+FVector(0,0,15);
+        const FVector Face=CastChecked<AVSMPassengerCharacter>(Actor)->GetFaceLocation();
         DialogueCamera->SetActorLocation(Eye);
         DialogueCamera->SetActorRotation((Face-Eye).Rotation());
         DialogueCamera->GetCameraComponent()->FieldOfView=70;
@@ -128,4 +128,3 @@ void AVSMPlayerController::SetMenuOpen(bool bOpen)
     // The server deadline keeps running while menus are open.
     OnMenuVisibilityChanged(bOpen);
 }
-
