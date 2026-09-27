@@ -5,6 +5,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Passengers/VSMPassengerSpeechBubble.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
@@ -99,6 +101,16 @@ AVSMPassengerCharacter::AVSMPassengerCharacter()
     TaskMarker->SetHorizontalAlignment(EHTA_Center);
     TaskMarker->SetWorldSize(24);
     TaskMarker->SetTextRenderColor(FColor(46,205,197));
+    SpeechBubbleComponent=CreateDefaultSubobject<UWidgetComponent>(TEXT("SpeechBubble"));
+    SpeechBubbleComponent->SetupAttachment(GetRootComponent());
+    SpeechBubbleComponent->SetWidgetClass(UVSMPassengerSpeechBubble::StaticClass());
+    SpeechBubbleComponent->SetWidgetSpace(EWidgetSpace::World);
+    SpeechBubbleComponent->SetRelativeLocation(FVector(0.f,0.f,135.f));
+    SpeechBubbleComponent->SetRelativeScale3D(FVector(0.12f));
+    SpeechBubbleComponent->SetPivot(FVector2D(0.5f,1.f));
+    SpeechBubbleComponent->SetDrawAtDesiredSize(true);
+    SpeechBubbleComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    SpeechBubbleComponent->SetVisibility(false);
 }
 void AVSMPassengerCharacter::BeginPlay()
 {
@@ -109,6 +121,7 @@ void AVSMPassengerCharacter::BeginPlay()
     GetWorld()->GetSubsystem<UVSMActorRegistrySubsystem>()->RegisterActor(PassengerId,this);
     TaskMarker->SetText(DisplayName);
     TaskMarker->SetVisibility(false);
+    RefreshSpeechBubble();
     WorldPresenter->OnViewChanged.AddDynamic(this,&AVSMPassengerCharacter::PresentTask);
     PresentTask(WorldPresenter->View);
 }
@@ -136,6 +149,7 @@ void AVSMPassengerCharacter::Tick(float DeltaSeconds)
     if(bHasTask)
         if(const auto* Camera=UGameplayStatics::GetPlayerCameraManager(this,0))
             TaskMarker->SetWorldRotation((Camera->GetCameraLocation()-TaskMarker->GetComponentLocation()).Rotation());
+    if(!LastSpeech.IsEmpty()) UpdateSpeechBubbleTransform();
 }
 void AVSMPassengerCharacter::UpdateTaskMarker()
 {
@@ -146,6 +160,24 @@ void AVSMPassengerCharacter::UpdateTaskMarker()
     if(!bHasTask)return;
     TaskMarker->SetText(FText::FromString(Indicator));
     TaskMarker->SetTextRenderColor(Indicator.StartsWith(TEXT("▲"))?FColor(240,80,80):Indicator.StartsWith(TEXT("●"))?FColor(240,185,70):FColor(70,205,220));
+}
+
+void AVSMPassengerCharacter::RefreshSpeechBubble()
+{
+    if(!SpeechBubbleComponent) return;
+    SpeechBubbleComponent->InitWidget();
+    SpeechBubbleWidget=Cast<UVSMPassengerSpeechBubble>(SpeechBubbleComponent->GetUserWidgetObject());
+    if(SpeechBubbleWidget) SpeechBubbleWidget->SetSpeech(LastSpeech);
+    SpeechBubbleComponent->SetVisibility(!LastSpeech.IsEmpty());
+    if(!LastSpeech.IsEmpty()) UpdateSpeechBubbleTransform();
+}
+void AVSMPassengerCharacter::UpdateSpeechBubbleTransform()
+{
+    if(!SpeechBubbleComponent) return;
+    const FVector BubbleLocation=GetFaceLocation()+FVector(0.f,0.f,30.f);
+    SpeechBubbleComponent->SetWorldLocation(BubbleLocation);
+    if(const auto* Camera=UGameplayStatics::GetPlayerCameraManager(this,0))
+        SpeechBubbleComponent->SetWorldRotation((Camera->GetCameraLocation()-BubbleLocation).Rotation());
 }
 
 void AVSMPassengerCharacter::EndPlay(const EEndPlayReason::Type Reason)
@@ -163,7 +195,7 @@ void AVSMPassengerCharacter::Interact_Implementation(AActor* Interactor) { SetLo
 
 bool AVSMPassengerCharacter::ApplyPresentationCommand_Implementation(const FVSMPresentationCommandDto& Command,AActor* Target,FString& OutReason)
 {
-    if (Command.Type==TEXT("speak")) { LastSpeech=FText::FromString(Command.Value); return true; }
+    if (Command.Type==TEXT("speak")) { LastSpeech=FText::FromString(Command.Value); RefreshSpeechBubble(); return true; }
     if (Command.Type==TEXT("set_task_marker"))
     {
         if (Command.Value!=TEXT("true") && Command.Value!=TEXT("false")) { OutReason=TEXT("Marker value must be true or false"); return false; }
