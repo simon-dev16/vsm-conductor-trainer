@@ -7,6 +7,8 @@
 #include "VSMPassengerCharacter.generated.h"
 
 class UTextRenderComponent;
+class UWidgetComponent;
+class UVSMPassengerSpeechBubble;
 class UStaticMeshComponent;
 class UVSMWorldPresenter;
 class UChildActorComponent;
@@ -49,6 +51,8 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="VSM|Passenger") bool bHasTask=false;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<UStaticMeshComponent> PlaceholderBody;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<UTextRenderComponent> TaskMarker;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<UWidgetComponent> SpeechBubbleComponent;
+    UPROPERTY(Transient) TObjectPtr<UVSMPassengerSpeechBubble> SpeechBubbleWidget;
     UPROPERTY(BlueprintAssignable, Category="VSM|Interaction") FVSMPassengerInteraction OnInteracted;
     virtual bool CanInteract_Implementation(AActor* Interactor) const override;
     virtual FText GetInteractionLabel_Implementation() const override;
@@ -56,6 +60,8 @@ public:
     virtual bool ApplyPresentationCommand_Implementation(const FVSMPresentationCommandDto& Command,AActor* Target,FString& OutReason) override;
 private:
     void UpdateTaskMarker();
+    void RefreshSpeechBubble();
+    void UpdateSpeechBubbleTransform();
     float TaskMarkerElapsed=0.f;
     void ConfigureVisual();
     void PlayReaction();
