@@ -454,5 +454,20 @@ FVSMWorldView UVSMShiftSubsystem::GetWorldView(const FString& WorldId) const
         Object->TryGetStringField(TEXT("item"),View.Item);Object->TryGetBoolField(TEXT("available"),View.bAvailable);Object->TryGetBoolField(TEXT("marker"),View.bMarker);
         break;
     }
+    // Prefer the active task; otherwise retain the most recent completed reaction.
+    const TArray<TSharedPtr<FJsonValue>>* Tasks=nullptr;
+    if(State->TryGetArrayField(TEXT("tasks"),Tasks))
+    {
+        for(int32 Index=Tasks->Num()-1;Index>=0;--Index)
+        {
+            const auto Task=(*Tasks)[Index]->AsObject(); FString ActorId,Status,TaskEmotion;
+            if(!Task || !Task->TryGetStringField(TEXT("actor_id"),ActorId) || ActorId!=WorldId) continue;
+            Task->TryGetStringField(TEXT("status"),Status);
+            Task->TryGetStringField(TEXT("emotion"),TaskEmotion);
+            if(View.Emotion.IsEmpty() || Status==TEXT("active")) View.Emotion=TaskEmotion;
+            if(Status==TEXT("active")) break;
+        }
+        if(View.Emotion.IsEmpty()) View.Emotion=TEXT("neutral");
+    }
     return View;
 }
