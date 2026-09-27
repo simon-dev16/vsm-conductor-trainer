@@ -22,7 +22,8 @@ void UVSMInteractionComponent::RefreshFocus()
     FRotator Rotation;
     Pawn->GetController()->GetPlayerViewPoint(Start,Rotation);
     FHitResult Hit;
-    FCollisionQueryParams Params(SCENE_QUERY_STAT(VSMInteraction),false,Pawn);
+    // Seat collision hulls enclose the occupant; visibility must follow the actual seat surface.
+    FCollisionQueryParams Params(SCENE_QUERY_STAT(VSMInteraction),true,Pawn);
     GetWorld()->LineTraceSingleByChannel(Hit,Start,Start+Rotation.Vector()*InteractionDistance,ECC_Visibility,Params);
     auto* Actor=Hit.GetActor();
     if (bUseProximity)

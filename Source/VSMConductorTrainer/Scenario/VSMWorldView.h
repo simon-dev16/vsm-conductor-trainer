@@ -10,6 +10,7 @@ struct FVSMWorldView
     UPROPERTY(BlueprintReadOnly) FString Kind;
     UPROPERTY(BlueprintReadOnly) FString TaskId;
     UPROPERTY(BlueprintReadOnly) FString Item;
+    UPROPERTY(BlueprintReadOnly) FString Emotion;
     UPROPERTY(BlueprintReadOnly) bool bAvailable=false;
     UPROPERTY(BlueprintReadOnly) bool bMarker=false;
 };

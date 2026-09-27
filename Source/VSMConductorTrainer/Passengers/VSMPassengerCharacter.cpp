@@ -12,11 +12,44 @@
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Components/ChildActorComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "LevelSequence.h"
+#include "LevelSequenceActor.h"
+#include "LevelSequencePlayer.h"
+#include "MovieScene.h"
+#include "MovieSceneBindingOverrides.h"
+#include "Tracks/MovieSceneSkeletalAnimationTrack.h"
+#include "Sections/MovieSceneSkeletalAnimationSection.h"
+#include "Animation/AnimSequence.h"
+
+namespace
+{
+FString PassengerBindingName(ULevelSequence* Sequence,const FMovieSceneBinding& Binding)
+{
+    if(const auto* Possessable=Sequence->GetMovieScene()->FindPossessable(Binding.GetObjectGuid())) return Possessable->GetName();
+    return FString();
+}
+}
 
 AVSMPassengerCharacter::AVSMPassengerCharacter()
 {
     PrimaryActorTick.bCanEverTick=true;
     WorldPresenter=CreateDefaultSubobject<UVSMWorldPresenter>(TEXT("WorldPresenter"));
+    PassengerVisual=CreateDefaultSubobject<UChildActorComponent>(TEXT("PassengerVisual"));
+    PassengerVisual->SetupAttachment(GetRootComponent());
+    HumanClasses.Add(TSoftClassPtr<AActor>(FSoftObjectPath(TEXT("/Game/CharactersExport/Characters/Human1_medium/BP_Human1_medium.BP_Human1_medium_C"))));
+    HumanClasses.Add(TSoftClassPtr<AActor>(FSoftObjectPath(TEXT("/Game/CharactersExport/Characters/Human2_medium/BP_Human2_medium.BP_Human2_medium_C"))));
+    const TCHAR* Paths[]={
+        TEXT("/Game/CharactersExport/Characters/Human1_Animations/Human1_Sit_Question1.Human1_Sit_Question1"),
+        TEXT("/Game/CharactersExport/Characters/Human1_Animations/Human1_Sit_Happy1.Human1_Sit_Happy1"),
+        TEXT("/Game/CharactersExport/Characters/Human1_Animations/Human1_Sit_Angry1.Human1_Sit_Angry1"),
+        TEXT("/Game/CharactersExport/Characters/Human2_Animations/Human2_SitQuestion.Human2_SitQuestion"),
+        TEXT("/Game/CharactersExport/Characters/Human2_Animations/Human2_SitHappy.Human2_SitHappy"),
+        TEXT("/Game/CharactersExport/Characters/Human2_Animations/Human2_SitAngry1.Human2_SitAngry1")};
+    for(const TCHAR* Path:Paths) Reactions.Add(TSoftObjectPtr<ULevelSequence>(FSoftObjectPath(Path)));
+    FacePostProcessClass=TSoftClassPtr<UAnimInstance>(FSoftObjectPath(TEXT("/Game/Passengers/ABP_PassengerFace_PostProcess.ABP_PassengerFace_PostProcess_C")));
     DisplayName=FText::FromString(TEXT("Passenger"));
     GetCapsuleComponent()->InitCapsuleSize(34.f,88.f);
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility,ECR_Block);
@@ -70,6 +103,9 @@ AVSMPassengerCharacter::AVSMPassengerCharacter()
 void AVSMPassengerCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    GetCharacterMovement()->DisableMovement();
+    ConfigureVisual();
+    PlayReaction();
     GetWorld()->GetSubsystem<UVSMActorRegistrySubsystem>()->RegisterActor(PassengerId,this);
     TaskMarker->SetText(DisplayName);
     TaskMarker->SetVisibility(false);
@@ -79,6 +115,18 @@ void AVSMPassengerCharacter::BeginPlay()
 void AVSMPassengerCharacter::PresentTask_Implementation(const FVSMWorldView& View)
 {
     UpdateTaskMarker();
+    bHasTask=View.bMarker;
+    TaskMarker->SetVisibility(View.bMarker);
+    TaskMarker->SetText(FText::FromString(View.Item.IsEmpty()?TEXT("!"):View.Item));
+    if (!View.Emotion.IsEmpty())
+    {
+        EVSMPassengerEmotion NewEmotion=EVSMPassengerEmotion::Neutral;
+        if(View.Emotion==TEXT("satisfied")) NewEmotion=EVSMPassengerEmotion::Satisfied;
+        else if(View.Emotion==TEXT("angry") || View.Emotion==TEXT("dissatisfied")) NewEmotion=EVSMPassengerEmotion::Angry;
+        else if(View.Emotion==TEXT("irritated")) NewEmotion=EVSMPassengerEmotion::Irritated;
+        else if(View.Emotion==TEXT("concerned")) NewEmotion=EVSMPassengerEmotion::Concerned;
+        SetEmotion(NewEmotion);
+    }
 }
 void AVSMPassengerCharacter::Tick(float DeltaSeconds)
 {
@@ -99,15 +147,19 @@ void AVSMPassengerCharacter::UpdateTaskMarker()
     TaskMarker->SetText(FText::FromString(Indicator));
     TaskMarker->SetTextRenderColor(Indicator.StartsWith(TEXT("▲"))?FColor(240,80,80):Indicator.StartsWith(TEXT("●"))?FColor(240,185,70):FColor(70,205,220));
 }
+
 void AVSMPassengerCharacter::EndPlay(const EEndPlayReason::Type Reason)
 {
     if (auto* Registry=GetWorld()->GetSubsystem<UVSMActorRegistrySubsystem>()) Registry->UnregisterActor(PassengerId,this);
+    if(ReactionPlayer) ReactionPlayer->Stop();
+    if(ReactionActor) ReactionActor->Destroy();
+    ReactionPlayer=nullptr; ReactionActor=nullptr; CurrentReaction=nullptr;
     Super::EndPlay(Reason);
 }
 bool AVSMPassengerCharacter::CanInteract_Implementation(AActor* Interactor) const { return IsValid(Interactor); }
 FText AVSMPassengerCharacter::GetInteractionLabel_Implementation() const
 { return FText::Format(NSLOCTEXT("VSM","TalkTo","Поговорить: {0}"),DisplayName); }
-void AVSMPassengerCharacter::Interact_Implementation(AActor* Interactor) { OnInteracted.Broadcast(PassengerId,Interactor); }
+void AVSMPassengerCharacter::Interact_Implementation(AActor* Interactor) { SetLookTarget(Interactor); OnInteracted.Broadcast(PassengerId,Interactor); }
 
 bool AVSMPassengerCharacter::ApplyPresentationCommand_Implementation(const FVSMPresentationCommandDto& Command,AActor* Target,FString& OutReason)
 {
@@ -127,17 +179,133 @@ bool AVSMPassengerCharacter::ApplyPresentationCommand_Implementation(const FVSMP
         else if (Command.Value==TEXT("angry")) Emotion=EVSMPassengerEmotion::Angry;
         else if (Command.Value==TEXT("concerned")) Emotion=EVSMPassengerEmotion::Concerned;
         else { OutReason=TEXT("Unknown emotion"); return false; }
+        PlayReaction();
         return true;
     }
     if (Command.Type==TEXT("look_at") && IsValid(Target))
     {
-        FRotator Rotation=(Target->GetActorLocation()-GetActorLocation()).Rotation();
-        Rotation.Pitch=0;
-        Rotation.Roll=0;
-        SetActorRotation(Rotation);
+        SetLookTarget(Target);
         return true;
     }
     // Animation/navigation/prop adapters are supplied by a Blueprint child with actual content.
     OutReason=TEXT("Capability requires a content adapter on this actor");
     return false;
+}
+
+void AVSMPassengerCharacter::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    if(AppearanceIndex==INDEX_NONE) AppearanceIndex=bRandomizeAppearance ? FMath::RandRange(0,1) : 0;
+    ConfigureVisual();
+}
+
+void AVSMPassengerCharacter::RandomizeAppearance()
+{
+#if WITH_EDITOR
+    Modify();
+#endif
+    AppearanceIndex=FMath::RandRange(0,1);
+    ConfigureVisual();
+    if(HasActorBegunPlay()) PlayReaction();
+}
+
+ULevelSequence* AVSMPassengerCharacter::ResolveReaction() const
+{
+    const int32 Mood=Emotion==EVSMPassengerEmotion::Satisfied ? 1 :
+        (Emotion==EVSMPassengerEmotion::Angry || Emotion==EVSMPassengerEmotion::Irritated ? 2 : 0);
+    const int32 Index=FMath::Clamp(AppearanceIndex,0,1)*3+Mood;
+    return Reactions.IsValidIndex(Index) ? Reactions[Index].LoadSynchronous() : nullptr;
+}
+
+void AVSMPassengerCharacter::ConfigureVisual()
+{
+    AppearanceIndex=FMath::Clamp(AppearanceIndex,0,1);
+    if(!HumanClasses.IsValidIndex(AppearanceIndex)) return;
+    UClass* VisualClass=HumanClasses[AppearanceIndex].LoadSynchronous();
+    if(!VisualClass) return;
+    PassengerVisual->SetRelativeTransform(VisualOffset);
+    PassengerVisual->SetChildActorClass(VisualClass);
+    AActor* Visual=PassengerVisual->GetChildActor();
+    if(!Visual) return;
+    Visual->SetActorEnableCollision(false);
+    TInlineComponentArray<UStaticMeshComponent*> Placeholders(this);
+    for(auto* Part:Placeholders) { Part->SetVisibility(false); Part->SetHiddenInGame(true); }
+    TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+    for(auto* VisualMesh:Meshes)
+    {
+        VisualMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        VisualMesh->VisibilityBasedAnimTickOption=EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+        if(VisualMesh->GetFName()==TEXT("Face"))
+            if(UClass* FaceClass=FacePostProcessClass.LoadSynchronous()) VisualMesh->SetOverridePostProcessAnimBP(FaceClass);
+    }
+    // Face post-process copies the body's pose. Sequence binding order is arbitrary
+    // (Human1 has Face before Body), so evaluate Body first even after a child rebuild.
+    // Otherwise a newly created face copies the standing reference pose and freezes there.
+    Meshes.Sort([](const USkeletalMeshComponent& A,const USkeletalMeshComponent& B)
+    {
+        return A.GetFName()==TEXT("Body") && B.GetFName()!=TEXT("Body");
+    });
+    // A still seated preview in the editor; the game uses the complete authored sequence.
+    if(GetWorld() && !GetWorld()->IsGameWorld())
+        if(ULevelSequence* Sequence=ResolveReaction())
+            for(auto* VisualMesh:Meshes)
+            for(const FMovieSceneBinding& Binding:static_cast<const UMovieScene*>(Sequence->GetMovieScene())->GetBindings())
+                for(UMovieSceneTrack* Track:Binding.GetTracks())
+                    if(auto* AnimationTrack=Cast<UMovieSceneSkeletalAnimationTrack>(Track))
+                        for(UMovieSceneSection* Section:AnimationTrack->GetAllSections())
+                            if(auto* AnimationSection=Cast<UMovieSceneSkeletalAnimationSection>(Section))
+                                    if(VisualMesh->GetName()==PassengerBindingName(Sequence,Binding) && AnimationSection->Params.Animation)
+                                    {
+                                        VisualMesh->OverrideAnimationData(AnimationSection->Params.Animation,true,false,0.f,1.f);
+                                        VisualMesh->TickAnimation(0.f,false);
+                                        VisualMesh->RefreshBoneTransforms();
+                                    }
+}
+
+void AVSMPassengerCharacter::SetEmotion(EVSMPassengerEmotion NewEmotion)
+{
+    Emotion=NewEmotion;
+    if(HasActorBegunPlay()) PlayReaction();
+}
+
+void AVSMPassengerCharacter::SetLookTarget(AActor* Target) { LookTarget=Target; }
+
+FVector AVSMPassengerCharacter::GetFaceLocation() const
+{
+    if(AActor* Visual=PassengerVisual->GetChildActor())
+    {
+        TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+        for(auto* VisualMesh:Meshes) if(VisualMesh->GetFName()==TEXT("Face") && VisualMesh->DoesSocketExist(TEXT("head")))
+            return VisualMesh->GetSocketLocation(TEXT("head"))+FVector(0,0,8);
+    }
+    return GetActorLocation()+FVector(0,0,15);
+}
+
+void AVSMPassengerCharacter::PlayReaction()
+{
+    ULevelSequence* Sequence=ResolveReaction();
+    AActor* Visual=PassengerVisual->GetChildActor();
+    if(!Sequence || !Visual || (Sequence==CurrentReaction && ReactionPlayer)) return;
+    if(ReactionPlayer) ReactionPlayer->Stop();
+    if(ReactionActor) ReactionActor->Destroy();
+    FMovieSceneSequencePlaybackSettings Settings;
+    Settings.LoopCount.Value=-1;
+    Settings.FinishCompletionStateOverride=EMovieSceneCompletionModeOverride::ForceRestoreState;
+    ALevelSequenceActor* NewActor=nullptr;
+    ReactionPlayer=ULevelSequencePlayer::CreateLevelSequencePlayer(GetWorld(),Sequence,Settings,NewActor);
+    ReactionActor=NewActor;
+    CurrentReaction=Sequence;
+    if(!ReactionPlayer || !ReactionActor) return;
+    ReactionActor->SetOwner(this);
+    TInlineComponentArray<USkeletalMeshComponent*> Meshes(Visual);
+    for(const FMovieSceneBinding& Binding:static_cast<const UMovieScene*>(Sequence->GetMovieScene())->GetBindings())
+    {
+        TArray<UObject*> Objects;
+        const FString BindingName=PassengerBindingName(Sequence,Binding);
+        if(BindingName.StartsWith(TEXT("BP_Human"))) Objects.Add(Visual);
+        else for(auto* VisualMesh:Meshes) if(VisualMesh->GetName()==BindingName) Objects.Add(VisualMesh);
+        // Explicitly suppress bindings to the actors used to author the source sequences.
+        ReactionActor->BindingOverrides->SetBinding(FMovieSceneObjectBindingID(UE::MovieScene::FFixedObjectBindingID(Binding.GetObjectGuid(),MovieSceneSequenceID::Root)),Objects,false);
+    }
+    ReactionPlayer->Play();
 }
