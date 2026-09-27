@@ -1,4 +1,4 @@
-param([string]$EngineRoot='C:\Program Files\Epic Games\UE_5.4')
+param([string]$EngineRoot='C:\Program Files\Epic Games\UE_5.8')
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $saved=Join-Path $root 'Saved\Verification\V2'
@@ -19,7 +19,9 @@ try {
     $path=Join-Path $saved 'Automation\index.json'
     if(!(Test-Path $path) -or (Get-Item $path).LastWriteTimeUtc -lt $started){throw 'Fresh automation report missing'}
     $report=Get-Content $path -Raw | ConvertFrom-Json
-    if($report.failed -ne 0 -or ($report.succeeded+$report.succeededWithWarnings) -lt 1 -or $report.notRun -ne 0){throw 'V2 lifecycle failed'}
+    $expected=@('VSM.V2.ScreenNavigation','VSM.V2.WaterRecovery')
+    if($report.failed -ne 0 -or $report.notRun -ne 0 -or $report.tests.Count -ne $expected.Count){throw 'V2 automation set failed'}
+    foreach($name in $expected){if(@($report.tests | Where-Object {$_.fullTestPath -eq $name -and $_.state -eq 'Success'}).Count -ne 1){throw ('Expected automation test did not pass: '+$name)}}
     exit $code
 } finally {
     if(!$fixture.HasExited){Stop-Process -Id $fixture.Id}

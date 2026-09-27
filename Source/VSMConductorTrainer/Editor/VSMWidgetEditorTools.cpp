@@ -7,6 +7,44 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/Widget.h"
+#include "Animation/WidgetAnimation.h"
+#include "Kismet2/KismetEditorUtilities.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+
+bool UVSMWidgetEditorTools::CompileScreen(UObject* WidgetBlueprint)
+{
+    auto* BP = Cast<UWidgetBlueprint>(WidgetBlueprint);
+    if (!BP) return false;
+    BP->Modify();
+    TSet<FName> LiveVariableNames;
+    BP->ForEachSourceWidget([&](UWidget* Widget)
+    {
+        if (!Widget) return;
+        const FName Name = Widget->GetFName();
+        LiveVariableNames.Add(Name);
+        const FGuid* Existing = BP->WidgetVariableNameToGuidMap.Find(Name);
+        if (!Existing || !Existing->IsValid()) BP->WidgetVariableNameToGuidMap.Add(Name, FGuid::NewGuid());
+    });
+    for (const TObjectPtr<UWidgetAnimation>& Animation : BP->Animations)
+    {
+        if (!Animation) continue;
+        const FName Name = Animation->GetFName();
+        LiveVariableNames.Add(Name);
+        const FGuid* Existing = BP->WidgetVariableNameToGuidMap.Find(Name);
+        if (!Existing || !Existing->IsValid()) BP->WidgetVariableNameToGuidMap.Add(Name, FGuid::NewGuid());
+    }
+    for (auto It = BP->WidgetVariableNameToGuidMap.CreateIterator(); It; ++It)
+    {
+        if (!LiveVariableNames.Contains(It.Key())) It.RemoveCurrent();
+    }
+    BP->Bindings.RemoveAll([](const FDelegateEditorBinding& Binding)
+    {
+        return Binding.PropertyName == TEXT("Text");
+    });
+    FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(BP);
+    FKismetEditorUtilities::CompileBlueprint(BP);
+    return BP->Status != BS_Error;
+}
 
 namespace
 {
@@ -121,12 +159,17 @@ void AuditBounds(UWidget* Widget, float Left, float Top, float Width, float Heig
         {
             const FAnchors Anchors = Canvas->GetAnchors();
             const FVector2D Alignment = Canvas->GetAlignment();
-            const FVector2D Size = Canvas->GetSize();
+            const FVector2D Size = Canvas->GetAutoSize() ? Child->GetDesiredSize() : Canvas->GetSize();
             const FVector2D Offset = Canvas->GetPosition();
-            ChildLeft = Left + Anchors.Minimum.X * Width + Alignment.X * Size.X + Offset.X;
-            ChildTop = Top + Anchors.Minimum.Y * Height + Alignment.Y * Size.Y + Offset.Y;
-            ChildWidth = Size.X;
-            ChildHeight = Size.Y;
+            const FMargin Margins = Canvas->GetOffsets();
+            ChildLeft = Left + Anchors.Minimum.X * Width + Offset.X;
+            ChildTop = Top + Anchors.Minimum.Y * Height + Offset.Y;
+            ChildWidth = Anchors.IsStretchedHorizontal()
+                ? (Anchors.Maximum.X-Anchors.Minimum.X)*Width-Offset.X-Margins.Right : Size.X;
+            ChildHeight = Anchors.IsStretchedVertical()
+                ? (Anchors.Maximum.Y-Anchors.Minimum.Y)*Height-Offset.Y-Margins.Bottom : Size.Y;
+            if (!Anchors.IsStretchedHorizontal()) ChildLeft -= Alignment.X * Size.X;
+            if (!Anchors.IsStretchedVertical()) ChildTop -= Alignment.Y * Size.Y;
             if (ChildLeft < 0.0f || ChildTop < 0.0f ||
                 ChildLeft + ChildWidth > LimitW || ChildTop + ChildHeight > LimitH)
             {

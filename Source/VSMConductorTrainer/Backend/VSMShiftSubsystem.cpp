@@ -258,9 +258,9 @@ FString UVSMShiftSubsystem::Field(const FString& Path) const
     auto Object=State;
     FString Key=Path;if(Key.StartsWith(TEXT("profile."))){Object=Profile;Key.RightChopInline(8);}
     if(!Object)return TEXT("—");
-    const auto* Value=Object->Values.Find(Key);if(!Value)return TEXT("—");
-    if((*Value)->Type==EJson::String)return (*Value)->AsString();
-    if((*Value)->Type==EJson::Number){double Number=(*Value)->AsNumber();if(Key==TEXT("remaining_seconds"))Number=FMath::Max(0.,Number-(FPlatformTime::Seconds()-ReceivedAt));return FString::Printf(TEXT("%.0f"),Number);}
+    const TSharedPtr<FJsonValue> Value=Object->TryGetField(FStringView(Key));if(!Value.IsValid())return TEXT("—");
+    if(Value->Type==EJson::String)return Value->AsString();
+    if(Value->Type==EJson::Number){double Number=Value->AsNumber();if(Key==TEXT("remaining_seconds"))Number=FMath::Max(0.,Number-(FPlatformTime::Seconds()-ReceivedAt));return FString::Printf(TEXT("%.0f"),Number);}
     return TEXT("—");
 }
 FString UVSMShiftSubsystem::TaskText() const
@@ -279,7 +279,7 @@ FString UVSMShiftSubsystem::DocumentsText(const FString& Document) const
     const TArray<TSharedPtr<FJsonValue>>* Tickets=nullptr;if(!State||!State->TryGetArrayField(TEXT("tickets"),Tickets))return TEXT("Откройте смену.");
     for(auto& Ticket:*Tickets){auto T=Ticket->AsObject();if(T->GetStringField(TEXT("actor_id"))!=PassengerId)continue;
         const TSharedPtr<FJsonObject>* Doc=nullptr;if(!T->TryGetObjectField(Document,Doc))return TEXT("");FString Result;
-        for(auto& Pair:(*Doc)->Values)Result+=Pair.Key+TEXT(": ")+Pair.Value->AsString()+TEXT("\n");return Result;}
+        for(auto& Pair:(*Doc)->Values)Result+=FString(Pair.Key.ToView())+TEXT(": ")+Pair.Value->AsString()+TEXT("\n");return Result;}
     return TEXT("");
 }
 void UVSMShiftSubsystem::LoadProfile(){Request(TEXT("GET"),TEXT("/v2/profile"),nullptr,[this](auto V){Profile=V;});}

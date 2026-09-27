@@ -1,4 +1,4 @@
-param([switch]$Live,[switch]$Portrait,[string]$EngineRoot='C:\Program Files\Epic Games\UE_5.4',[string]$ApiBaseUrl='')
+param([switch]$Live,[switch]$Portrait,[string]$EngineRoot='C:\Program Files\Epic Games\UE_5.8',[string]$ApiBaseUrl='')
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path -Parent $PSScriptRoot
 $exe=Join-Path $projectRoot 'Build\Artifacts\Windows\VSMConductorTrainer.exe'
