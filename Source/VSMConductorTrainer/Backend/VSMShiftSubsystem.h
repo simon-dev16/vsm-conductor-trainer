@@ -45,6 +45,7 @@ public:
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString Field(const FString& Path) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString TaskText() const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString TaskIndicator(const FString& ActorId) const;
+    bool CanPassengerAction(const FString& ActorId,const FString& Action) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString InventoryText(int32 Slot) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString DocumentsText(const FString& Document) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString ReportText() const;

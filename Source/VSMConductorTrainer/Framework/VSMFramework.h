@@ -60,6 +60,12 @@ private:
     UFUNCTION() void ConfirmExit();
     UFUNCTION() void CancelExit();
     UFUNCTION() void Logout();
+    UFUNCTION() void ConfirmLogout();
+    UFUNCTION() void InteractFocused();
+    UFUNCTION() void UseFocusedItem();
+    UFUNCTION() void FocusChanged(AActor* Actor);
+    void RefreshContextActions();
+    void SetButtonVisual(const FString& Name,bool bActive,bool bClickable);
     UFUNCTION() void CloseInfo();
     UFUNCTION() void CloseToGameplay();
     void UpdateJoystick(const FGeometry& Geometry,const FVector2D& Position,const FVector2D& Origin);

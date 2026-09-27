@@ -252,7 +252,71 @@ void UVSMShiftSubsystem::SelectPassenger(const FString& ActorId)
 FString UVSMShiftSubsystem::Field(const FString& Path) const
 {
     if(Path==TEXT("message"))return Message;
+    if(Path.StartsWith(TEXT("inventory_slot:")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>* Slots=nullptr;
+        if(State&&State->TryGetArrayField(TEXT("inventory"),Slots))for(int32 I=0;I<Slots->Num();++I)
+            if(!(*Slots)[I]->IsNull())if(auto Item=(*Slots)[I]->AsObject();Item&&Item->GetStringField(TEXT("item_id"))==Path.RightChop(15))return FString::FromInt(I);
+        return TEXT("-1");
+    }
     if(Path==TEXT("speech"))return RecognizedText;
+    if(Path==TEXT("leaderboard.selected"))return Leaderboard?Leaderboard->GetStringField(TEXT("scope")):TEXT("company");
+    if(Path==TEXT("profile.attempts"))return FString::Printf(TEXT("сегодня осталось\n%s/10 попыток"),*Field(TEXT("profile.attempts_remaining")));
+    if(Path==TEXT("profile.level_label"))return TEXT("Уровень ")+Field(TEXT("profile.level"));
+    if(Path==TEXT("profile.xp_label"))return Profile?FString::Printf(TEXT("%.0f / 500"),FMath::Fmod(Profile->GetNumberField(TEXT("xp")),500.)):TEXT("—");
+    if(Path==TEXT("profile.xp_progress"))return Profile?FString::Printf(TEXT("%.1f"),FMath::Fmod(Profile->GetNumberField(TEXT("xp")),500.)/5.):TEXT("0");
+    if(Path==TEXT("safety_percent"))return Field(TEXT("safety"))+TEXT("%");
+    if(Path==TEXT("loyalty_percent"))return Field(TEXT("loyalty"))+TEXT("%");
+    if(Path==TEXT("task_type")){auto Task=CurrentTask();return Task?Task->GetStringField(TEXT("task_type"))+TEXT(" задача"):TEXT("Диалог с пассажиром");}
+    if(Path.StartsWith(TEXT("task_timer:")))
+    {
+        const FString Key=Path.RightChop(11);
+        const FString Type=Key==TEXT("critical")?TEXT("критическая"):Key==TEXT("priority")?TEXT("приоритетная"):TEXT("сервисная");
+        const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;double Minimum=DBL_MAX;
+        if(State&&State->TryGetArrayField(TEXT("tasks"),Rows))for(const auto& Row:*Rows)
+            if(auto Task=Row->AsObject();Task&&Task->GetStringField(TEXT("status"))==TEXT("active")&&Task->GetStringField(TEXT("task_type"))==Type)
+                Minimum=FMath::Min(Minimum,Task->GetNumberField(TEXT("remaining_seconds")));
+        if(Minimum==DBL_MAX)return TEXT("—");
+        const int32 Seconds=FMath::Max(0,FMath::CeilToInt(Minimum-(FPlatformTime::Seconds()-ReceivedAt)));
+        return FString::Printf(TEXT("%02d:%02d"),Seconds/60,Seconds%60);
+    }
+    if(Path.StartsWith(TEXT("achievement:")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
+        if(Profile&&Profile->TryGetArrayField(TEXT("achievements"),Rows))for(const auto& Row:*Rows)if(Row->AsString()==Path.RightChop(12))return TEXT("1");
+        return TEXT("0");
+    }
+    if(Path.StartsWith(TEXT("profile.score:")))
+    {
+        const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
+        if(Profile&&Profile->TryGetArrayField(TEXT("history"),Rows))for(int32 I=Rows->Num()-1;I>=0;--I)
+        {
+            const auto Row=(*Rows)[I]->AsObject();const TSharedPtr<FJsonObject>* Rating=nullptr;
+            if(Row&&Row->GetStringField(TEXT("status"))==TEXT("completed")&&Row->TryGetObjectField(TEXT("rating"),Rating))
+                return FString::Printf(TEXT("%.0f"),(*Rating)->GetNumberField(Path.RightChop(14)));
+        }
+        return TEXT("—");
+    }
+    if(Path==TEXT("leaderboard.scope"))
+    {
+        const FString Scope=Leaderboard?Leaderboard->GetStringField(TEXT("scope")):TEXT("company");
+        const FString Label=Scope==TEXT("brigade")?TEXT("Бригада"):Scope==TEXT("depot")?TEXT("Депо"):TEXT("Компания");
+        FString Name=Field(TEXT("profile.")+Scope);
+        Name.ReplaceInline(*Label,TEXT(""),ESearchCase::IgnoreCase);
+        Name=Name.TrimStartAndEnd();
+        if(!Name.IsEmpty())Name[0]=FChar::ToUpper(Name[0]);
+        return Label+TEXT(" ")+Name;
+    }
+    if(Path.StartsWith(TEXT("leaderboard.column:")))
+    {
+        const FString Key=Path.RightChop(19);FString Result;const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
+        if(Leaderboard&&Leaderboard->TryGetArrayField(TEXT("items"),Rows))for(const auto& Row:*Rows)
+        {
+            const auto Item=Row->AsObject();if(!Item)continue;
+            Result+=(Key==TEXT("name")?Item->GetStringField(TEXT("name"))+(Item->GetBoolField(TEXT("is_self"))?TEXT(" (Вы)"):TEXT("")):FString::Printf(TEXT("%.0f"),Item->GetNumberField(Key)))+TEXT("\n");
+        }
+        return Result;
+    }
     if(Path==TEXT("connection"))return bBusy?TEXT("Запрос выполняется…"):(bPendingRetry?TEXT("Восстанавливаем соединение…"):Message);
     if(Path==TEXT("timer"))
     {
@@ -329,18 +393,46 @@ FString UVSMShiftSubsystem::TaskText() const
 FString UVSMShiftSubsystem::InventoryText(int32 Slot) const
 {
     const TArray<TSharedPtr<FJsonValue>>* Slots=nullptr;
-    if(!State||!State->TryGetArrayField(TEXT("inventory"),Slots)||!Slots->IsValidIndex(Slot)||(*Slots)[Slot]->IsNull())return TEXT("·");
-    auto Item=(*Slots)[Slot]->AsObject();return Item ? Item->GetStringField(TEXT("item_id")) : TEXT("·");
+    if(!State||!State->TryGetArrayField(TEXT("inventory"),Slots)||!Slots->IsValidIndex(Slot)||(*Slots)[Slot]->IsNull())return TEXT("");
+    auto Item=(*Slots)[Slot]->AsObject();if(!Item)return TEXT("");
+    const FString Id=Item->GetStringField(TEXT("item_id"));
+    if(Id==TEXT("water"))return TEXT("Вода");
+    if(Id==TEXT("first_aid"))return TEXT("Аптечка");
+    return Id;
 }
 FString UVSMShiftSubsystem::DocumentsText(const FString& Document) const
 {
     const TArray<TSharedPtr<FJsonValue>>* Tickets=nullptr;if(!State||!State->TryGetArrayField(TEXT("tickets"),Tickets))return TEXT("Откройте смену.");
     for(auto& Ticket:*Tickets){auto T=Ticket->AsObject();if(T->GetStringField(TEXT("actor_id"))!=PassengerId)continue;
         const TSharedPtr<FJsonObject>* Doc=nullptr;if(!T->TryGetObjectField(Document,Doc))return TEXT("");FString Result;
-        for(auto& Pair:(*Doc)->Values)Result+=FString(Pair.Key.ToView())+TEXT(": ")+Pair.Value->AsString()+TEXT("\n");return Result;}
+        const TPair<FString,FString> Fields[]={{TEXT("name"),TEXT("ФИО")},{TEXT("birth_date"),TEXT("Дата рождения")},{TEXT("citizenship"),TEXT("Гражданство")},{TEXT("sex"),TEXT("Пол")},{TEXT("document"),TEXT("Серия и номер")},{TEXT("train"),TEXT("Поезд")},{TEXT("carriage"),TEXT("Вагон")},{TEXT("seat"),TEXT("Место")},{TEXT("departure"),TEXT("Отправление")},{TEXT("arrival"),TEXT("Прибытие")}};
+        for(const auto& Pair:Fields)
+        {
+            FString Value;
+            if(!(*Doc)->TryGetStringField(Pair.Key,Value))continue;
+            if(Pair.Key==TEXT("birth_date")&&Value.Len()==10&&Value[4]=='-')Value=Value.Mid(8,2)+TEXT(".")+Value.Mid(5,2)+TEXT(".")+Value.Left(4);
+            if(Pair.Key==TEXT("sex")){if(Value==TEXT("M")||Value==TEXT("male"))Value=TEXT("М");else if(Value==TEXT("F")||Value==TEXT("female"))Value=TEXT("Ж");}
+            Result+=Pair.Value+TEXT(": ")+Value+TEXT("\n");
+        }
+        return Result;}
     return TEXT("");
 }
 void UVSMShiftSubsystem::LoadProfile(){Request(TEXT("GET"),TEXT("/v2/profile"),nullptr,[this](auto V){Profile=V;});}
+bool UVSMShiftSubsystem::CanPassengerAction(const FString& ActorId,const FString& Action) const
+{
+    if(!HasActiveShift())return false;
+    if(Action==TEXT("item"))return GetWorldView(ActorId).bAvailable;
+    const TArray<TSharedPtr<FJsonValue>>* Rows=nullptr;
+    if(Action==TEXT("ticket"))
+    {
+        if(State->TryGetArrayField(TEXT("tickets"),Rows))for(const auto& Row:*Rows)
+            if(auto Ticket=Row->AsObject();Ticket&&Ticket->GetStringField(TEXT("actor_id"))==ActorId&&!Ticket->GetBoolField(TEXT("checked")))return true;
+        return false;
+    }
+    if(State->TryGetArrayField(TEXT("tasks"),Rows))for(const auto& Row:*Rows)
+        if(auto Task=Row->AsObject();Task&&Task->GetStringField(TEXT("actor_id"))==ActorId&&Task->GetStringField(TEXT("status"))==TEXT("active"))return !Task->HasTypedField<EJson::Object>(TEXT("pending_action"));
+    return false;
+}
 void UVSMShiftSubsystem::LoadLeaderboard(const FString& Scope){Request(TEXT("GET"),TEXT("/v2/leaderboard/")+Scope,nullptr,[this](auto V){Leaderboard=V;});}
 FString UVSMShiftSubsystem::ReportText() const
 {
@@ -401,7 +493,7 @@ void UVSMShiftSubsystem::RecoverCurrentShift(bool bEnterGameplay)
     {
         const TSharedPtr<FJsonObject>* Shift=nullptr;
         if(!Value->TryGetObjectField(TEXT("shift"),Shift))
-        {State.Reset();ShiftId.Empty();TaskId.Empty();bCloseRecoveredShift=false;Message=TEXT("Активной смены нет. Можно начать новую.");return;}
+        {State.Reset();ShiftId.Empty();TaskId.Empty();bCloseRecoveredShift=false;Message=TEXT("Активной смены нет. Можно начать новую.");LoadProfile();return;}
         if(!Accept(*Shift))return;
         if(bCloseRecoveredShift){bCloseRecoveredShift=false;EndShiftForMenu();return;}
         const TArray<TSharedPtr<FJsonValue>>* Position=nullptr;
@@ -419,10 +511,11 @@ void UVSMShiftSubsystem::ApplyMutation(TSharedPtr<FJsonObject> Value,const FStri
     {
         bExitToMenu=false;State.Reset();ShiftId.Empty();TaskId.Empty();
         if(PC)PC->Navigate(EVSMUIScreen::Welcome);
+        LoadProfile();
         return;
     }
     if(!PC||!HasActiveShift())return;
-    if(Kind==TEXT("start"))PC->Navigate(EVSMUIScreen::Gameplay);
+    if(Kind==TEXT("start") || Kind==TEXT("check_ticket"))PC->Navigate(EVSMUIScreen::Gameplay);
     if(Kind==TEXT("answer") && CurrentTask() && CurrentTask()->HasTypedField<EJson::Object>(TEXT("pending_action")))
     {PC->Navigate(EVSMUIScreen::Gameplay);}
 }

@@ -29,6 +29,7 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="VSM|Passenger") bool bHasTask=false;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<UStaticMeshComponent> PlaceholderBody;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<UTextRenderComponent> TaskMarker;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VSM|Passenger") TObjectPtr<class UWidgetComponent> TaskIndicatorWidget;
     UPROPERTY(BlueprintAssignable, Category="VSM|Interaction") FVSMPassengerInteraction OnInteracted;
     virtual bool CanInteract_Implementation(AActor* Interactor) const override;
     virtual FText GetInteractionLabel_Implementation() const override;

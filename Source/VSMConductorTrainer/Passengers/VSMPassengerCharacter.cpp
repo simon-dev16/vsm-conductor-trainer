@@ -12,6 +12,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Camera/PlayerCameraManager.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Components/WidgetComponent.h"
+#include "UI/VSMTaskMarkerWidget.h"
 
 AVSMPassengerCharacter::AVSMPassengerCharacter()
 {
@@ -66,6 +68,13 @@ AVSMPassengerCharacter::AVSMPassengerCharacter()
     TaskMarker->SetHorizontalAlignment(EHTA_Center);
     TaskMarker->SetWorldSize(24);
     TaskMarker->SetTextRenderColor(FColor(46,205,197));
+    TaskIndicatorWidget=CreateDefaultSubobject<UWidgetComponent>(TEXT("TaskIndicatorWidget"));
+    TaskIndicatorWidget->SetupAttachment(GetRootComponent());
+    TaskIndicatorWidget->SetRelativeLocation(FVector(0,0,125));
+    TaskIndicatorWidget->SetWidgetSpace(EWidgetSpace::Screen);
+    TaskIndicatorWidget->SetDrawAtDesiredSize(true);
+    TaskIndicatorWidget->SetWidgetClass(UVSMTaskMarkerWidget::StaticClass());
+    TaskIndicatorWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 void AVSMPassengerCharacter::BeginPlay()
 {
@@ -94,10 +103,10 @@ void AVSMPassengerCharacter::UpdateTaskMarker()
     const auto* Shift=GetWorld()&&GetWorld()->GetGameInstance()?GetWorld()->GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>():nullptr;
     const FString Indicator=Shift?Shift->TaskIndicator(PassengerId):TEXT("");
     bHasTask=!Indicator.IsEmpty();
-    TaskMarker->SetVisibility(bHasTask);
+    TaskMarker->SetVisibility(false);
+    if(TaskIndicatorWidget->IsVisible()!=bHasTask)TaskIndicatorWidget->SetVisibility(bHasTask);
     if(!bHasTask)return;
-    TaskMarker->SetText(FText::FromString(Indicator));
-    TaskMarker->SetTextRenderColor(Indicator.StartsWith(TEXT("▲"))?FColor(240,80,80):Indicator.StartsWith(TEXT("●"))?FColor(240,185,70):FColor(70,205,220));
+    if(auto* Marker=Cast<UVSMTaskMarkerWidget>(TaskIndicatorWidget->GetUserWidgetObject()))Marker->SetIndicator(Indicator);
 }
 void AVSMPassengerCharacter::EndPlay(const EEndPlayReason::Type Reason)
 {

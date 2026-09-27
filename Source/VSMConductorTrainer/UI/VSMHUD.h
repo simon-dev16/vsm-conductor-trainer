@@ -16,6 +16,7 @@ public:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|UI") TSubclassOf<UUserWidget> RootWidgetClass;
     UPROPERTY(BlueprintReadOnly, Category="VSM|UI") TObjectPtr<UUserWidget> RootWidget;
+    UPROPERTY(Transient) TObjectPtr<UUserWidget> GameplayWidget;
     UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category="VSM|UI") TMap<EVSMUIScreen,TSubclassOf<UUserWidget>> ScreenClasses;
     UFUNCTION(BlueprintCallable, Category="VSM|UI") void ShowScreen(EVSMUIScreen Screen);
 
