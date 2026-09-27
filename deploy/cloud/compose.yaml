@@ -1,0 +1,24 @@
+services:
+  database:
+    restart: unless-stopped
+  backend:
+    restart: unless-stopped
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      VSM_API_DOMAIN: ${VSM_API_DOMAIN:?Set VSM_API_DOMAIN to the public DNS name}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/cloud/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  caddy_data:
+  caddy_config:
