@@ -7,6 +7,9 @@
 #include "Components/EditableTextBox.h"
 #include "Components/MultiLineEditableTextBox.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Blueprint/WidgetTree.h"
 UVSMBackendSubsystem* UVSMWidget::GetBackend() const
 {
     return GetGameInstance() ? GetGameInstance()->GetSubsystem<UVSMBackendSubsystem>() : nullptr;
@@ -23,6 +26,34 @@ void UVSMWidget::NativeConstruct()
     RefreshBindings();
     const auto* PC=GetConductorController();
     if(!PC)return;
+#if !UE_BUILD_SHIPPING
+    if(PC->GetScreen()==EVSMUIScreen::Connection)
+    {
+        if(auto* Shift=GetShift(); Shift && !Shift->bAuthenticated && !Shift->bGuestMode)
+        {
+            if(auto* Canvas=Cast<UCanvasPanel>(WidgetTree->RootWidget); Canvas && !GetWidgetFromName(TEXT("GuestPlayButton")))
+            {
+                auto* GuestButton=WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(),TEXT("GuestPlayButton"));
+                auto* GuestLabel=WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(),TEXT("GuestPlayButtonLabel"));
+                GuestLabel->SetText(FText::FromString(TEXT("Войти гостем — осмотреть уровень")));
+                GuestLabel->SetJustification(ETextJustify::Center);
+                FSlateFontInfo GuestFont=GuestLabel->GetFont();
+                GuestFont.Size=20;
+                GuestLabel->SetFont(GuestFont);
+                GuestButton->SetBackgroundColor(FLinearColor(0.12f,0.32f,0.42f,1.f));
+                GuestButton->AddChild(GuestLabel);
+                if(auto* CanvasSlot=Canvas->AddChildToCanvas(GuestButton))
+                {
+                    CanvasSlot->SetAnchors(FAnchors(0.5f,1.f));
+                    CanvasSlot->SetAlignment(FVector2D(0.5f,1.f));
+                    CanvasSlot->SetPosition(FVector2D(0.f,-24.f));
+                    CanvasSlot->SetSize(FVector2D(520.f,64.f));
+                    GuestButton->OnClicked.AddDynamic(this,&UVSMWidget::EnterGuestMode);
+                }
+            }
+        }
+    }
+#endif
 #define VSM_BIND_BUTTON(Name, Handler) if(auto* Button=Cast<UButton>(GetWidgetFromName(TEXT(Name)))){Button->OnClicked.Clear();Button->OnClicked.AddDynamic(this,&UVSMWidget::Handler);}
     switch(PC->GetScreen())
     {
@@ -96,6 +127,7 @@ void UVSMWidget::CancelExit(){ShowExitConfirmation(false);}
 void UVSMWidget::Logout(){if(auto* Shift=GetShift())Shift->SignOut();}
 void UVSMWidget::CloseInfo(){if(auto* PC=GetConductorController())PC->CloseInfo();}
 void UVSMWidget::CloseToGameplay(){Navigate(EVSMUIScreen::Gameplay);}
+void UVSMWidget::EnterGuestMode(){if(auto* Shift=GetShift())Shift->EnterGuestMode();}
 void UVSMWidget::ShowExitConfirmation(bool bVisible)
 {
     for(const TCHAR* Name:{TEXT("ExitDim"),TEXT("ExitQuestion"),TEXT("ExitYes"),TEXT("ExitNo")})

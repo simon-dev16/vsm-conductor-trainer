@@ -18,12 +18,16 @@
     {
       "Name": "PythonScriptPlugin",
       "Enabled": true,
-      "TargetAllowList": ["Editor"]
+      "TargetAllowList": [
+        "Editor"
+      ]
     },
     {
       "Name": "EditorScriptingUtilities",
       "Enabled": true,
-      "TargetAllowList": ["Editor"]
+      "TargetAllowList": [
+        "Editor"
+      ]
     },
     {
       "Name": "AudioCapture",
@@ -36,12 +40,16 @@
     {
       "Name": "ModelContextProtocol",
       "Enabled": true,
-      "TargetAllowList": ["Editor"]
+      "TargetAllowList": [
+        "Editor"
+      ]
     },
     {
       "Name": "AllToolsets",
       "Enabled": true,
-      "TargetAllowList": ["Editor"]
+      "TargetAllowList": [
+        "Editor"
+      ]
     },
     {
       "Name": "LiveLink",
@@ -54,8 +62,24 @@
     {
       "Name": "AppleARKitFaceSupport",
       "Enabled": true,
-      "SupportedTargetPlatforms": ["IOS", "Win64", "Mac", "Linux", "Android"]
+      "SupportedTargetPlatforms": [
+        "IOS",
+        "Win64",
+        "Mac",
+        "Linux",
+        "Android"
+      ]
+    },
+    {
+      "Name": "McpAutomationBridge",
+      "Enabled": true,
+      "TargetAllowList": [
+        "Editor"
+      ]
     }
   ],
-  "TargetPlatforms": ["Windows", "Android"]
+  "TargetPlatforms": [
+    "Windows",
+    "Android"
+  ]
 }

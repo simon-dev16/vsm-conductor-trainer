@@ -28,6 +28,7 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="VSM|Speech") bool bRecording=false;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Speech") FString RecognizedText;
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SignIn(const FString& Login,const FString& Password,bool bRegister);
+    UFUNCTION(BlueprintCallable, Category="VSM|Shift") void EnterGuestMode();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SignOut();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void StartShift(bool bRanked,int32 SituationId=46);
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void EndShiftForMenu();
@@ -51,6 +52,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SelectPassenger(const FString& ActorId);
     UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") bool bBusy=false;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") bool bAuthenticated=false;
+    UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") bool bGuestMode=false;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") FString Message;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Shift") FString PassengerId=TEXT("passenger_01");
     UPROPERTY(BlueprintAssignable, Category="VSM|Shift") FVSMShiftChanged OnChanged;

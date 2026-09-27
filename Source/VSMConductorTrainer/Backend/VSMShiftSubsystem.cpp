@@ -148,23 +148,41 @@ void UVSMShiftSubsystem::SignIn(const FString& Login,const FString& Password,boo
         if(!Value->TryGetStringField(TEXT("accessToken"),NewToken)||!Value->TryGetObjectField(TEXT("user"),User)||!(*User)->TryGetStringField(TEXT("id"),NewUser))
         {Message=TEXT("Некорректный ответ входа.");return;}
         bCloseRecoveredShift=!HasActiveShift();
-        Token=NewToken;UserId=NewUser;bAuthenticated=true;
+        Token=NewToken;UserId=NewUser;bAuthenticated=true;bGuestMode=false;
         State.Reset();ShiftId.Empty();TaskId.Empty();Profile.Reset();Leaderboard.Reset();
         PendingBody.Reset();PendingReply=nullptr;bPendingRetry=false;RestorePending();
         if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Welcome);
         if(bPendingRetry)RetryPending();else RecoverCurrentShift(false);
     });
 }
+void UVSMShiftSubsystem::EnterGuestMode()
+{
+#if !UE_BUILD_SHIPPING
+    if(bAuthenticated)return;
+    bGuestMode=true;
+    Message=TEXT("Гостевой просмотр: прогресс не сохраняется.");
+    if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))
+        PC->Navigate(EVSMUIScreen::Gameplay);
+    OnChanged.Broadcast();
+#endif
+}
 void UVSMShiftSubsystem::SignOut()
 {
     if(HasActiveShift()){EndShiftForMenu();return;}
-    ClearPending();Token.Empty();UserId.Empty();bAuthenticated=false;bExitToMenu=false;bCloseRecoveredShift=false;
+    ClearPending();Token.Empty();UserId.Empty();bAuthenticated=false;bGuestMode=false;bExitToMenu=false;bCloseRecoveredShift=false;
     State.Reset();Profile.Reset();Leaderboard.Reset();ShiftId.Empty();TaskId.Empty();Message.Empty();
     if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Connection);
     OnChanged.Broadcast();
 }
 void UVSMShiftSubsystem::StartShift(bool bRanked,int32 SituationId)
 {
+#if !UE_BUILD_SHIPPING
+    if(bGuestMode)
+    {
+        if(auto* PC=Cast<AVSMPlayerController>(UGameplayStatics::GetPlayerController(this,0)))PC->Navigate(EVSMUIScreen::Gameplay);
+        return;
+    }
+#endif
     if(!bAuthenticated){Message=TEXT("Войдите в аккаунт.");OnChanged.Broadcast();return;}
     auto Body=MakeShared<FJsonObject>();Body->SetStringField(TEXT("clientActionId"),FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphens));
     Body->SetStringField(TEXT("mode"),bRanked?TEXT("ranked"):TEXT("training"));Body->SetNumberField(TEXT("situation_id"),SituationId);
