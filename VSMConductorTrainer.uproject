@@ -18,16 +18,12 @@
     {
       "Name": "PythonScriptPlugin",
       "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
+      "TargetAllowList": ["Editor"]
     },
     {
       "Name": "EditorScriptingUtilities",
       "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
+      "TargetAllowList": ["Editor"]
     },
     {
       "Name": "AudioCapture",
@@ -46,10 +42,20 @@
       "Name": "AllToolsets",
       "Enabled": true,
       "TargetAllowList": ["Editor"]
+    },
+    {
+      "Name": "LiveLink",
+      "Enabled": true
+    },
+    {
+      "Name": "LiveLinkControlRig",
+      "Enabled": true
+    },
+    {
+      "Name": "AppleARKitFaceSupport",
+      "Enabled": true,
+      "SupportedTargetPlatforms": ["IOS", "Win64", "Mac", "Linux", "Android"]
     }
   ],
-  "TargetPlatforms": [
-    "Windows",
-    "Android"
-  ]
+  "TargetPlatforms": ["Windows", "Android"]
 }
