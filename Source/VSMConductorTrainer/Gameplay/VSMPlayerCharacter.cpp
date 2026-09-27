@@ -22,16 +22,16 @@ AVSMPlayerCharacter::AVSMPlayerCharacter()
     GetCapsuleComponent()->InitCapsuleSize(32.f,88.f);
     GetCharacterMovement()->MaxWalkSpeed=260.f;
     PrimaryActorTick.bCanEverTick=true;
-    bUseControllerRotationYaw=false;
-    GetCharacterMovement()->bOrientRotationToMovement=true;
+    bUseControllerRotationYaw=true;
+    GetCharacterMovement()->bOrientRotationToMovement=false;
     CameraBoom=CreateDefaultSubobject<USpringArmComponent>(TEXT("ViewBoom"));
     CameraBoom->SetupAttachment(GetCapsuleComponent());
     CameraBoom->bUsePawnControlRotation=true;
     CameraBoom->SetRelativeRotation(FRotator::ZeroRotator);
-    CameraBoom->TargetArmLength=ThirdPersonDistance;
+    CameraBoom->TargetArmLength=0.f;
     CameraBoom->TargetOffset=FVector(0,0,60);
     CameraBoom->bDoCollisionTest=true;
-    CameraBoom->bEnableCameraLag=true;
+    CameraBoom->bEnableCameraLag=false;
     CameraBoom->CameraLagSpeed=8.f;
     Camera=CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
     Camera->SetupAttachment(CameraBoom);
@@ -57,6 +57,7 @@ AVSMPlayerCharacter::AVSMPlayerCharacter()
     Head->SetRelativeLocation(FVector(0,0,70));
     Head->SetRelativeScale3D(FVector(.8f,.8f,.34f));
     Head->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    PlaceholderBody->SetVisibility(false,true);
     Interaction=CreateDefaultSubobject<UVSMInteractionComponent>(TEXT("Interaction"));
     MoveAction=CreateDefaultSubobject<UInputAction>(TEXT("Move"));
     MoveAction->ValueType=EInputActionValueType::Axis2D;
@@ -94,7 +95,7 @@ void AVSMPlayerCharacter::InstallInput()
     }
     Input->AddMappingContext(ActiveMapping,0);
 }
-void AVSMPlayerCharacter::PawnClientRestart() { Super::PawnClientRestart(); InstallInput(); }
+void AVSMPlayerCharacter::PawnClientRestart() { Super::PawnClientRestart(); SetFirstPerson(true); InstallInput(); }
 void AVSMPlayerCharacter::SetupPlayerInputComponent(UInputComponent* Component)
 {
     Super::SetupPlayerInputComponent(Component);
@@ -141,16 +142,16 @@ void AVSMPlayerCharacter::Pause() { if (auto* PC=Cast<AVSMPlayerController>(Cont
 
 void AVSMPlayerCharacter::SetFirstPerson(bool bEnabled)
 {
-    bFirstPerson=bEnabled;
-    CameraBoom->TargetArmLength=bEnabled ? 0.f : ThirdPersonDistance;
-    CameraBoom->bEnableCameraLag=!bEnabled;
-    PlaceholderBody->SetVisibility(!bEnabled,true);
-    bUseControllerRotationYaw=bEnabled;
-    GetCharacterMovement()->bOrientRotationToMovement=!bEnabled;
-    OnPerspectiveChanged(bEnabled);
+    bFirstPerson=true;
+    CameraBoom->TargetArmLength=0.f;
+    CameraBoom->bEnableCameraLag=false;
+    PlaceholderBody->SetVisibility(false,true);
+    bUseControllerRotationYaw=true;
+    GetCharacterMovement()->bOrientRotationToMovement=false;
+    OnPerspectiveChanged(true);
 }
 void AVSMPlayerCharacter::AddViewInput(FVector2D Axis)
 {
     AddControllerYawInput(Axis.X*LookSensitivity);
-    AddControllerPitchInput(-Axis.Y*LookSensitivity);
+    AddControllerPitchInput(Axis.Y*LookSensitivity);
 }

@@ -35,7 +35,9 @@ for prop,name in {'default_pawn_class':'BP_Conductor','player_controller_class':
 assets.save_asset(framework+'BP_GameMode',False)
 hud=unreal.get_default_object(cls('BP_HUD'))
 mapping=dict(hud.get_editor_property('screen_classes'))
-for key,name in {'WELCOME':'MainMenu','SCENARIOS':'Training','GAMEPLAY':'GameplayHUD','DIALOGUE':'Dialogue','RESULTS':'Results','PROFILE':'Profile','LEADERBOARD':'Leaderboard','GUIDE':'Theory','CONNECTION':'Login','TICKET_CHECK':'TicketCheck','SETTINGS':'Settings','TUTORIAL':'Tutorial'}.items():
+for stale in ('SCENARIOS', 'SETTINGS'):
+    mapping.pop(getattr(unreal.VSMUIScreen, stale), None)
+for key,name in {'WELCOME':'MainMenu','GAMEPLAY':'GameplayHUD','DIALOGUE':'Dialogue','RESULTS':'Results','PROFILE':'Profile','LEADERBOARD':'Leaderboard','GUIDE':'Theory','CONNECTION':'Login','TICKET_CHECK':'TicketCheck','TUTORIAL':'Tutorial'}.items():
     enum=getattr(unreal.VSMUIScreen,key)
     if enum not in mapping:
         mapping[enum]=assets.load_blueprint_class('/Game/UI/Screens/WBP_'+name)
@@ -45,10 +47,9 @@ level.save_current_level()
 unreal.log('VSM_WORLD_READY: BP_WorldStation saved, native framework fallbacks replaced, missing UMG slots filled')
 
 bindings={
-    'GameplayHUD': {'Gauges':'gauges','Timer':'remaining_seconds','Tasks':'tasks','Status':'message',**{f'Slot{i}Label':f'slot:{i}' for i in range(8)}},
+    'GameplayHUD': {'Gauges':'gauges','Timer':'timer','TaskIndicators':'tasks_compact','Status':'message',**{f'Slot{i}Label':f'slot:{i}' for i in range(8)}},
     'Dialogue': {'PassengerLine':'task','Status':'message'},
-    'Login': {'Status':'message'},
-    'Training': {'Status':'message'}
+    'Login': {'Status':'message'}
 }
 for name,defaults in bindings.items():
     widget_path='/Game/UI/Screens/WBP_'+name

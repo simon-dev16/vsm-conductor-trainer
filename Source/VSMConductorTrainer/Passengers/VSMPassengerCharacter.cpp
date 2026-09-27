@@ -1,17 +1,21 @@
 #include "Passengers/VSMPassengerCharacter.h"
 #include "Scenario/VSMWorldPresenter.h"
 #include "Scenario/VSMActorRegistrySubsystem.h"
+#include "Backend/VSMShiftSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInterface.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
+#include "Kismet/GameplayStatics.h"
+#include "Camera/PlayerCameraManager.h"
 #include "UObject/ConstructorHelpers.h"
 
 AVSMPassengerCharacter::AVSMPassengerCharacter()
 {
-    PrimaryActorTick.bCanEverTick=false;
+    PrimaryActorTick.bCanEverTick=true;
     WorldPresenter=CreateDefaultSubobject<UVSMWorldPresenter>(TEXT("WorldPresenter"));
     DisplayName=FText::FromString(TEXT("Passenger"));
     GetCapsuleComponent()->InitCapsuleSize(34.f,88.f);
@@ -74,8 +78,26 @@ void AVSMPassengerCharacter::BeginPlay()
 }
 void AVSMPassengerCharacter::PresentTask_Implementation(const FVSMWorldView& View)
 {
-    bHasTask=View.bMarker;TaskMarker->SetVisibility(View.bMarker);
-    TaskMarker->SetText(FText::FromString(View.Item.IsEmpty()?TEXT("!"):View.Item));
+    UpdateTaskMarker();
+}
+void AVSMPassengerCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    TaskMarkerElapsed+=DeltaSeconds;
+    if(TaskMarkerElapsed>=1.f){TaskMarkerElapsed=0.f;UpdateTaskMarker();}
+    if(bHasTask)
+        if(const auto* Camera=UGameplayStatics::GetPlayerCameraManager(this,0))
+            TaskMarker->SetWorldRotation((Camera->GetCameraLocation()-TaskMarker->GetComponentLocation()).Rotation());
+}
+void AVSMPassengerCharacter::UpdateTaskMarker()
+{
+    const auto* Shift=GetWorld()&&GetWorld()->GetGameInstance()?GetWorld()->GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>():nullptr;
+    const FString Indicator=Shift?Shift->TaskIndicator(PassengerId):TEXT("");
+    bHasTask=!Indicator.IsEmpty();
+    TaskMarker->SetVisibility(bHasTask);
+    if(!bHasTask)return;
+    TaskMarker->SetText(FText::FromString(Indicator));
+    TaskMarker->SetTextRenderColor(Indicator.StartsWith(TEXT("▲"))?FColor(240,80,80):Indicator.StartsWith(TEXT("●"))?FColor(240,185,70):FColor(70,205,220));
 }
 void AVSMPassengerCharacter::EndPlay(const EEndPlayReason::Type Reason)
 {

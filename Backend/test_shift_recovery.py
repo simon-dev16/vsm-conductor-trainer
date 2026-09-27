@@ -11,7 +11,6 @@ from domain import ApiError
 from shift_store import ShiftStore, encode
 from test_shift_store import FakeProvider
 from server import make_server
-from service import Service
 
 
 class ShiftRecoveryTests(unittest.TestCase):
@@ -82,8 +81,7 @@ class ShiftRecoveryTests(unittest.TestCase):
     def test_http_current_requires_auth_and_returns_the_snapshot(self):
         state = self.start()
         token = self.store.login({'login':'recovery','password':'test-password'})['accessToken']
-        server = make_server(Service(Path(self.temp.name)/'http.db'),0,host='127.0.0.1')
-        server.shift_store = self.store
+        server = make_server(self.store,0,host='127.0.0.1')
         thread = threading.Thread(target=server.serve_forever,daemon=True)
         thread.start()
         url = f'http://127.0.0.1:{server.server_address[1]}/v2/shifts/current'
