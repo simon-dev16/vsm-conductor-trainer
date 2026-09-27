@@ -7,10 +7,9 @@ import time
 from collections import defaultdict, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 from domain import ApiError
-from service import Service
 from shift_store import ShiftStore
 from speech import transcribe
 
@@ -77,13 +76,10 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError()
                 except (ValueError,UnicodeError):
                     raise ApiError(400,'invalid_json','Требуется JSON-объект.') from None
-            service=self.server.service
+            store=self.server.shift_store
             if self.command=='GET' and path=='/health':
-                return self.respond(200,{'status':'ok','service':'vsm-backend-foundation','aiConfigured':all(getattr(service.provider,k,'') for k in ('key','folder','model'))})
-            if self.command=='POST' and path=='/v1/auth/login':
-                return self.respond(200,service.login(body))
+                return self.respond(200,{'status':'ok','apiVersion':2,'aiConfigured':all(getattr(store.engine.provider,k,'') for k in ('key','folder','model'))})
             if path.startswith('/v2/'):
-                store=self.server.shift_store
                 if self.command=='POST' and path=='/v2/auth/register':
                     return self.respond(201,store.register(body))
                 if self.command=='POST' and path=='/v2/auth/login':
@@ -107,20 +103,6 @@ class Handler(BaseHTTPRequestHandler):
                 if len(parts)==4 and parts[:2]==['v2','shifts'] and parts[3]=='actions' and self.command=='POST':
                     return self.respond(200,store.act(user_id,parts[2],body))
                 raise ApiError(404,'not_found','Маршрут не найден.')
-            user=service.authenticate(self.headers.get('Authorization',''))
-            if self.command=='GET' and path=='/v1/scenarios':
-                return self.respond(200,service.catalog())
-            if self.command=='GET' and path=='/v1/profile':
-                return self.respond(200,service.profile(user))
-            if self.command=='POST' and path=='/v1/runs':
-                return self.respond(201,service.start(user,body))
-            parts=path.strip('/').split('/')
-            if len(parts)>=3 and parts[:2]==['v1','runs']:
-                run_id=unquote(parts[2])
-                if self.command=='GET' and len(parts)==3:
-                    return self.respond(200,service.get_run(user,run_id))
-                if self.command=='POST' and len(parts)==4:
-                    return self.respond(200,service.turn(user,run_id,parts[3],body))
             raise ApiError(404,'not_found','Маршрут не найден.')
         except ApiError as exc:
             self.respond(exc.status,{'error':{'code':exc.code,'message':str(exc)}})
@@ -142,10 +124,9 @@ class Handler(BaseHTTPRequestHandler):
     do_POST=dispatch
 
 
-def make_server(service,port=18767,host=None):
+def make_server(store,port=18767,host=None):
     server=ThreadingHTTPServer((host or os.getenv('VSM_BIND','127.0.0.1'),port),Handler)
-    server.service=service
-    server.shift_store=ShiftStore(os.getenv('VSM_SHIFT_DATABASE',service.path+'.shifts'))
+    server.shift_store=store
     server.rate_lock=threading.Lock()
     server.requests=defaultdict(deque)
     return server
@@ -155,13 +136,10 @@ if __name__=='__main__':
     load_env()
     logging.basicConfig(level=logging.INFO,format='%(levelname)s %(message)s')
     root=Path(__file__).resolve().parents[1]
-    database=Path(os.getenv('VSM_DATABASE',str(root/'Backend/data/vsm.sqlite3')))
+    database=Path(os.getenv('VSM_SHIFT_DATABASE',str(root/'Backend/data/shifts.sqlite3')))
     if not database.is_absolute():
         database=root/database
-    service=Service(database)
-    if os.getenv('VSM_DEMO_PASSWORD'):
-        service.create_demo_user(os.environ['VSM_DEMO_PASSWORD'])
-    server=make_server(service,int(os.getenv('VSM_PORT','18767')))
+    server=make_server(ShiftStore(database),int(os.getenv('VSM_PORT','18767')))
     bound=server.server_address
     logging.info('VSM backend: http://%s:%d. No provider calls until a run is requested.',*bound)
     if bound[0]=='127.0.0.1':

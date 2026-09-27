@@ -1,7 +1,7 @@
 """Local-only UE end-to-end fixture for authored scenario 46.
 
 This is a test backend, not a production fallback. It binds only to loopback and
-keeps both databases in a TemporaryDirectory that is removed on exit.
+keeps its database in a TemporaryDirectory that is removed on exit.
 """
 import argparse
 import os
@@ -15,7 +15,6 @@ BACKEND = Path(__file__).resolve().parents[1] / 'Backend'
 sys.path.insert(0, str(BACKEND))
 
 import server as backend_server  # noqa: E402
-from service import Service  # noqa: E402
 from shift_store import ShiftStore  # noqa: E402
 
 
@@ -92,11 +91,9 @@ def main():
 
     with TemporaryDirectory(prefix='v2-water-fixture-') as temp_dir:
         root = Path(temp_dir)
-        service = Service(root / 'v1.sqlite3', provider=provider)
         store = ShiftStore(root / 'v2.sqlite3', provider=provider)
         store.register({'login': 'fixture', 'password': 'fixture-password'})
-        server = backend_server.make_server(service, port=args.port, host='127.0.0.1')
-        server.shift_store = store
+        server = backend_server.make_server(store, port=args.port, host='127.0.0.1')
         server.RequestHandlerClass = FixtureHandler
         server.drop_take_response = args.drop_take_response
         print(f'FIXTURE http://127.0.0.1:{args.port} scenario=46', flush=True)

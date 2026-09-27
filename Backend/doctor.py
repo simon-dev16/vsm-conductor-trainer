@@ -18,7 +18,8 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND))
 
-from ai_provider import YandexProvider, http_failure  # noqa: E402
+from ai_provider import http_failure  # noqa: E402
+from authored_ai import AuthoredYandexProvider  # noqa: E402
 from server import load_env  # noqa: E402
 
 # (имя, значение по умолчанию, пояснение, нужно ли для работы ИИ)
@@ -31,8 +32,6 @@ KEYS = [
     ('VSM_SPEECHKIT_API_KEY', '', 'Ключ SpeechKit. Без него доступен только текстовый ответ.', False),
     ('VSM_PORT', '18767', 'Порт локального сервера.', False),
     ('VSM_BIND', '127.0.0.1', 'Адрес прослушивания. 0.0.0.0 нужен только для телефона.', False),
-    ('VSM_DEMO_PASSWORD', '', 'Пароль демо-пользователя.', False),
-    ('VSM_DATABASE', 'Backend/data/vsm.sqlite3', 'Файл базы смен.', False),
 ]
 
 PLACEHOLDERS = ('change-this', 'changeme', 'your-', 'your_', 'example',
@@ -223,7 +222,7 @@ def main():
     elif not ai_ready:
         out('  пропущен: ключи не заполнены или сервер не перезапущен.')
     else:
-        ok, message, code = probe_model(YandexProvider())
+        ok, message, code = probe_model(AuthoredYandexProvider())
         out(f'  {"[OK]" if ok else "[!!]"} {message}' + (f'  ({code})' if code else ''))
         if not ok:
             fail(f'Модель не отвечает: {message}')

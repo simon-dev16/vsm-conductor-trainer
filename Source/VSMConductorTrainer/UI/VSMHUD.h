@@ -1,11 +1,9 @@
-#pragma once
+﻿#pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "Core/VSMTypes.h"
 #include "VSMHUD.generated.h"
 
-class SVSMDevPanel;
-class SVSMTrainingScreen;
 class UUserWidget;
 UCLASS()
 class VSMCONDUCTORTRAINER_API AVSMHUD : public AHUD

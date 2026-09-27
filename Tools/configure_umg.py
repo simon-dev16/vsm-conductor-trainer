@@ -1,24 +1,15 @@
-"""Repair functional UMG layout and bindings without replacing click graphs.
-
-Run with UnrealEditor-Cmd -run=pythonscript -script=... -unattended -NullRHI.
-All twelve assets are compiled; missing widgets, overlapping buttons, detached
-labels, bad bindings or save failures abort the commandlet with an error.
-"""
+"""Configure the game screens and their bindings."""
 import json
 import os
 import unreal
 
 ROOT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 SCREENS = '/Game/UI/Screens/WBP_'
-NAMES = ['MainMenu', 'Login', 'Training', 'GameplayHUD', 'Dialogue', 'TicketCheck',
-         'Profile', 'Leaderboard', 'Results', 'Settings', 'Theory', 'Tutorial']
-SITUATIONS = json.load(open(os.path.join(ROOT, 'Contracts/Authored/situations.json'), encoding='utf-8'))
-TITLES = {row['id']: row['situation_description'] for row in SITUATIONS['situations']}
-START = {'TrainWater': 46, 'TrainTemp': 15, **{'TrainSituation%d' % i: i for i in [8, 9, 10, 17, 28, 43, 44]}}
+NAMES = ['MainMenu', 'Login', 'GameplayHUD', 'Dialogue', 'TicketCheck',
+         'Profile', 'Leaderboard', 'Results', 'Theory', 'Tutorial']
 TEXT = {
     'MainMenu': {'Status': 'connection'}, 'Login': {'Status': 'connection'},
-    'Training': {'Status': 'connection'},
-    'GameplayHUD': {'Gauges': 'gauges', 'Timer': 'remaining_seconds', 'Tasks': 'tasks', 'Status': 'connection',
+    'GameplayHUD': {'Gauges': 'gauges', 'Timer': 'timer', 'TaskIndicators': 'tasks_compact', 'Status': 'connection',
                     **{'Slot%dLabel' % i: 'slot:%d' % i for i in range(8)}},
     'Dialogue': {'Status': 'connection', 'PassengerLine': 'task'},
     'TicketCheck': {'Passport': 'document:passport', 'Ticket': 'document:ticket', 'Terminal': 'document:terminal', 'Status': 'connection'},
@@ -27,13 +18,11 @@ TEXT = {
     'Results': {'ReportText': 'report', 'StatusText': 'connection'},
 }
 ENABLED = {
-    'MainMenu': {'LoginButton': 'idle', 'ResumeButton': 'action', 'RetryButton': 'retry'},
+    'MainMenu': {'PlayButton': 'start'},
     'Login': {'LoginButton': 'idle', 'RegisterButton': 'idle'},
-    'Training': {**{b: 'start' for b in [*START, 'Ranked']}, 'RetryButton': 'retry'},
-    'Dialogue': {'SendAnswer': 'action', 'OpenDocuments': 'action', 'RetryButton': 'retry'},
-    'GameplayHUD': {**{b: 'action' for b in ['Interact', 'Take', 'FinishButton'] + ['Slot%d' % i for i in range(8)]}, 'RetryButton': 'retry'},
+    'Dialogue': {'SendAnswer': 'action'},
+    'GameplayHUD': {b: 'action' for b in ['Interact', 'OpenDocuments', 'Take'] + ['Slot%d' % i for i in range(8)]},
     'TicketCheck': {'AcceptButton': 'action', 'RejectButton': 'action'},
-    'Profile': {'RefreshButton': 'idle'},
     'Leaderboard': {b: 'idle' for b in ['CompanyButton', 'DepotButton', 'BrigadeButton']},
 }
 
@@ -72,11 +61,11 @@ class Screen:
 
     def place(self, w, x, y, width, height):
         slot = self.root.add_child_to_canvas(w)
-        slot.set_anchors(unreal.Anchors(minimum=unreal.Vector2D(0, 0), maximum=unreal.Vector2D(0, 0)))
+        slot.set_anchors(unreal.Anchors(minimum=unreal.Vector2D(x / 1280.0, y / 720.0), maximum=unreal.Vector2D((x + width) / 1280.0, (y + height) / 720.0)))
         slot.set_alignment(unreal.Vector2D(0, 0))
         slot.set_auto_size(False)
-        slot.set_position(unreal.Vector2D(x, y))
-        slot.set_size(unreal.Vector2D(width, height))
+        slot.set_position(unreal.Vector2D(0, 0))
+        slot.set_size(unreal.Vector2D(0, 0))
         self.rects[w.get_name()] = [x, y, width, height]
         return w
 
@@ -90,7 +79,7 @@ class Screen:
         self.rects[w.get_name()] = [0, 0, 1280, 720]
         return w
     def text(self, name, x, y, width, height, value=None, size=22):
-        w = self.get(name, unreal.TextBlock)
+        w = self.get(name, unreal.TextBlock, create=True)
         if value is not None:
             w.set_text(value)
         font = w.get_editor_property('font')
@@ -101,7 +90,7 @@ class Screen:
         return self.place(w, x, y, width, height)
 
     def button(self, name, label, x, y, width=260, height=52):
-        b = self.get(name, unreal.Button)
+        b = self.get(name, unreal.Button, create=True)
         t = self.get(name + 'Label', unreal.TextBlock, create=True)
         t.set_text(label)
         font = t.get_editor_property('font')
@@ -163,52 +152,59 @@ class Screen:
 report = {}
 for name in NAMES:
     s = Screen(name)
+    if name not in ('GameplayHUD', 'Dialogue', 'TicketCheck'):
+        background = s.get('MenuBackground', unreal.Border, create=True)
+        background.set_brush_color(unreal.LinearColor(0.04, 0.07, 0.12, 1.0))
+        background.set_visibility(unreal.SlateVisibility.HIT_TEST_INVISIBLE)
+        s.place_stretched(background)
     if name != 'GameplayHUD':
         s.text('Title', 40, 24, 1200, 64, size=30)
     if name == 'MainMenu':
-        for i, (b, label) in enumerate([('PlayButton','Играть'), ('TrainingButton','Тренировка'), ('ProfileButton','Профиль'),
-                                      ('LeaderboardButton','Таблица лидеров'), ('TheoryButton','Теория и справка'), ('SettingsButton','Настройки')]):
-            s.button(b, label, 240 + i%2*420, 130 + i//2*90, 380, 64)
-        s.button('LoginButton', 'Войти / сменить аккаунт', 60, 570, 360)
-        s.button('ResumeButton', 'Вернуться в вагон', 460, 570, 360)
-        s.button('RetryButton', 'Повторить запрос', 860, 570, 360)
-        s.text('Status', 60, 430, 1160, 110)
-    elif name == 'Training':
-        for i, (b, situation) in enumerate(START.items()):
-            s.button(b, TITLES[situation], 40+i%3*410, 120+i//3*116, 380, 100)
-        s.button('Ranked', 'Рейтинговая смена', 40, 490, 380, 64)
-        s.button('BackButton', 'Назад', 40, 640)
-        s.button('RetryButton', 'Повторить запрос', 930, 640, 310)
-        s.text('Status', 40, 566, 1200, 64)
+        for i, (b, label) in enumerate([('PlayButton','Играть'), ('ProfileButton','Профиль'),
+                                      ('LeaderboardButton','Таблица лидеров'), ('TheoryButton','Теория и справка')]):
+            s.button(b, label, 240 + i%2*420, 185 + i//2*110, 380, 72)
+        s.text('Status', 60, 470, 1160, 110)
     elif name == 'Login':
-        s.text('LoginHint', 80, 112, 1120, 70)
         for key, y in [('LoginInput', 220), ('PasswordInput', 310)]:
-            s.place(s.get(key, unreal.EditableTextBox), 300, y, 680, 64)
+            field = s.get(key, unreal.EditableTextBox)
+            field.set_hint_text('Логин (минимум 3 символа)' if key == 'LoginInput' else 'Пароль (минимум 8 символов)')
+            s.place(field, 300, y, 680, 64)
         s.button('LoginButton','Войти',300,420,320)
         s.button('RegisterButton','Создать аккаунт',660,420,320)
-        s.button('BackButton','Назад',40,640)
         s.text('Status',80,500,1120,115)
     elif name == 'GameplayHUD':
-        s.place_stretched(s.get('TouchSurface', unreal.Border))
-        s.text('Title',24,12,490,42,size=24)
+        surface = s.get('TouchSurface', unreal.Border)
+        surface.set_visibility(unreal.SlateVisibility.VISIBLE)
+        surface.set_brush_color(unreal.LinearColor(0, 0, 0, 0))
+        s.place_stretched(surface)
+        for key, asset, box in [('JoystickBase','VirtualJoystick_Background',(70,470,180,180)),
+                                ('JoystickThumb','VirtualJoystick_Thumb',(125,525,70,70))]:
+            image = s.get(key, unreal.Image, create=True)
+            image.set_brush_from_texture(unreal.load_asset('/Engine/MobileResources/HUD/' + asset))
+            image.set_visibility(unreal.SlateVisibility.HIT_TEST_INVISIBLE)
+            s.place(image,*box)
         s.text('Gauges',24,62,480,72)
         s.text('Timer',530,62,220,50)
-        s.scroll('TasksScroll',['Tasks'],24,150,520,200)
-        for b,label,x,y in [('Menu','Меню',800,20),('Camera','1 / 3 лицо',1030,20),('HelpButton','Как играть',800,88),
-                             ('SettingsButton','Настройки',1030,88),('FinishButton','Завершить смену',1030,294),
-                             ('RetryButton','Повторить запрос',1030,362),('Interact','Поговорить',1030,430),('Take','Получить предмет',1030,498)]:
+        s.text('TaskIndicators',24,150,300,190,size=30)
+        for b,label,x,y in [('Menu','В главное меню',800,20),('HelpButton','Как играть',800,88),
+                             ('Interact','Поговорить',800,430),('OpenDocuments','Проверить документы',1030,430),('Take','Получить предмет',1030,498)]:
             s.button(b,label,x,y,220,56)
-        s.text('MoveHint',24,420,300,100)
         s.text('Status',350,480,650,100)
         for i in range(8): s.button('Slot%d'%i,'·',300+i*116,628,108,64)
+        dim = s.get('ExitDim', unreal.Border, create=True)
+        dim.set_brush_color(unreal.LinearColor(0.01, 0.02, 0.04, 0.9))
+        s.place_stretched(dim)
+        s.text('ExitQuestion', 320, 245, 640, 72, 'Вы точно хотите завершить игру?', 26)
+        s.button('ExitYes', 'Да', 400, 335, 200)
+        s.button('ExitNo', 'Нет', 680, 335, 200)
+        for key in ('ExitDim', 'ExitQuestion', 'ExitYes', 'ExitNo'):
+            s.get(key, unreal.Widget).set_visibility(unreal.SlateVisibility.COLLAPSED)
     elif name == 'Dialogue':
         s.scroll('PassengerScroll',['PassengerLine'],40,110,1200,130)
         s.place(s.get('AnswerInput', unreal.EditableTextBox),40,270,1200,100)
         s.button('SendAnswer','Ответить',40,420,340)
-        s.button('OpenDocuments','Проверить документы',440,420,360)
         s.text('Status',40,500,1200,100)
-        s.button('BackButton','Вернуться в вагон',40,640,340)
-        s.button('RetryButton','Повторить запрос',930,640,310)
+        s.button('BackButton','Закрыть',40,640,340)
     elif name == 'TicketCheck':
         for i, (header, block, label) in enumerate([('PassportHeader','Passport','Паспорт'),('TicketHeader','Ticket','Билет'),('TerminalHeader','Terminal','Терминал')]):
             s.text(header,40+i*410,105,380,44,label)
@@ -216,12 +212,12 @@ for name in NAMES:
         s.text('Status',40,525,1200,76)
         s.button('AcceptButton','Принять билет',40,635,350)
         s.button('RejectButton','Отклонить билет',440,635,350)
-        s.button('BackButton','Вернуться к диалогу',900,635,340)
+        s.button('BackButton','Закрыть',900,635,340)
     elif name == 'Profile':
         s.scroll('ProfileScroll',['ProfileSummary'],40,120,550,380)
         s.scroll('ScrollBox',['Activity'],630,120,610,380)
         s.text('StatusText',40,525,1200,80)
-        s.button('RefreshButton','Обновить профиль',40,635,350)
+        s.button('LogoutButton','Выйти / сменить аккаунт',420,635,420)
         s.button('BackButton','Назад',980,635)
     elif name == 'Leaderboard':
         s.scroll('LeaderboardScroll',['LeaderboardText'],40,120,1200,380)
@@ -232,17 +228,23 @@ for name in NAMES:
         s.scroll('ReportScroll',['ReportText'],40,120,1200,380)
         s.text('StatusText',40,525,1200,80)
         s.button('BackButton','В главное меню',930,635,310)
-    elif name == 'Settings':
-        s.scroll('HelpScroll',['Help'],40,120,1200,360)
-        for i, (b,label) in enumerate([('BackButton','В главное меню'),('ResumeButton','Вернуться в вагон'),('RestartButton','Выбрать новую смену')]):
-            s.button(b,label,40+i*410,610,380,64)
     else:
         s.scroll('InstructionsScroll',['Instructions'],40,110,1200,470)
-        s.button('BackButton','В главное меню',40,635,340)
-        s.button('ContinueButton','Вернуться в вагон',900,635,340)
+        s.button('BackButton','Закрыть',900,635,340)
     report[name] = s.finish()
 
 os.makedirs(os.path.join(ROOT,'Saved/Verification'), exist_ok=True)
 with open(os.path.join(ROOT,'Saved/Verification/umg_layout.json'),'w',encoding='utf-8') as f:
     json.dump(report,f,ensure_ascii=False,indent=2)
-unreal.log('VSM_UMG_VERIFIED: 12 screens compiled, saved, layout and bindings checked')
+hud_path = '/Game/Framework/BP_HUD'
+hud = unreal.get_default_object(unreal.EditorAssetLibrary.load_blueprint_class(hud_path))
+mapping = dict(hud.get_editor_property('screen_classes'))
+for name in ('SCENARIOS', 'SETTINGS'):
+    mapping.pop(getattr(unreal.VSMUIScreen, name), None)
+hud.set_editor_property('screen_classes', mapping)
+unreal.EditorAssetLibrary.save_asset(hud_path, False)
+for name in ('Training', 'Settings'):
+    path = SCREENS + name
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+unreal.log('VSM_UMG_VERIFIED: %d screens compiled, saved, layout and bindings checked' % len(NAMES))

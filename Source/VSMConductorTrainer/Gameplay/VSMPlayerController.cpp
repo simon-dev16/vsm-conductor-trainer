@@ -5,6 +5,7 @@
 #include "UI/VSMHUD.h"
 #include "Backend/VSMBackendSubsystem.h"
 #include "Backend/VSMShiftSubsystem.h"
+#include "Framework/VSMFramework.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -21,13 +22,16 @@ AVSMPlayerController::AVSMPlayerController()
 void AVSMPlayerController::BeginPlay()
 {
     Super::BeginPlay();
-    Navigate(EVSMUIScreen::Welcome);
+    Navigate(GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->bAuthenticated?EVSMUIScreen::Welcome:EVSMUIScreen::Connection);
 }
 void AVSMPlayerController::OnPossess(APawn* InPawn)
 {
     Super::OnPossess(InPawn);
     if (auto* Conductor=Cast<AVSMPlayerCharacter>(InPawn))
+    {
+        Conductor->SetFirstPerson(true);
         Conductor->Interaction->OnInteracted.AddUniqueDynamic(this,&AVSMPlayerController::HandleInteraction);
+    }
 }
 void AVSMPlayerController::HandleInteraction(AActor* Actor)
 {
@@ -68,10 +72,17 @@ void AVSMPlayerController::HandleRunUpdated(const FVSMRunDto& Run)
 }
 void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
 {
-    if(NewScreen==EVSMUIScreen::Gameplay && (!GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->HasActiveShift() || GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->bPendingRetry))
-    {GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->RecoverCurrentShift(true);return;}
-    if(NewScreen==EVSMUIScreen::Scenarios || NewScreen==EVSMUIScreen::Profile || NewScreen==EVSMUIScreen::Leaderboard)
-        if(!GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>()->bAuthenticated)NewScreen=EVSMUIScreen::Connection;
+    auto* Shift=GetGameInstance()->GetSubsystem<UVSMShiftSubsystem>();
+    if(NewScreen==EVSMUIScreen::Settings || NewScreen==EVSMUIScreen::Scenarios)NewScreen=EVSMUIScreen::Welcome;
+    if(!Shift->bAuthenticated && NewScreen!=EVSMUIScreen::Connection)NewScreen=EVSMUIScreen::Connection;
+    if(NewScreen==EVSMUIScreen::Gameplay && !Shift->HasActiveShift())NewScreen=EVSMUIScreen::Welcome;
+    if(NewScreen==EVSMUIScreen::Welcome && Shift->HasActiveShift())
+    {
+        if(auto* HUD=Cast<AVSMHUD>(GetHUD()))
+            if(auto* Widget=Cast<UVSMWidget>(HUD->RootWidget.Get()))Widget->ShowExitConfirmation(true);
+        return;
+    }
+    if(NewScreen==EVSMUIScreen::Guide || NewScreen==EVSMUIScreen::Tutorial)InfoReturnScreen=Screen;
     for (TActorIterator<AActor> It(GetWorld());It;++It)
         if(It->ActorHasTag(TEXT("VSM.DialogueOnly"))) It->SetActorHiddenInGame(false);
     if (auto* Conductor=Cast<AVSMPlayerCharacter>(GetPawn())) Conductor->SetVirtualMovement(FVector2D::ZeroVector);
@@ -84,9 +95,19 @@ void AVSMPlayerController::Navigate(EVSMUIScreen NewScreen)
     Screen=NewScreen;
     SetMenuOpen(NewScreen!=EVSMUIScreen::Gameplay);
     if(auto* HUD=Cast<AVSMHUD>(GetHUD()))HUD->ShowScreen(NewScreen);
+    if(NewScreen==EVSMUIScreen::Profile)Shift->LoadProfile();
 }
-void AVSMPlayerController::HandleSessionCleared() { Navigate(EVSMUIScreen::Welcome); }
-void AVSMPlayerController::ToggleMenu() { Navigate(Screen==EVSMUIScreen::Gameplay ? EVSMUIScreen::Welcome : EVSMUIScreen::Gameplay); }
+void AVSMPlayerController::CloseInfo() { Navigate(InfoReturnScreen==EVSMUIScreen::Gameplay || InfoReturnScreen==EVSMUIScreen::Dialogue ? InfoReturnScreen : EVSMUIScreen::Welcome); }
+void AVSMPlayerController::HandleSessionCleared() { Navigate(EVSMUIScreen::Connection); }
+void AVSMPlayerController::ToggleMenu()
+{
+    if(Screen==EVSMUIScreen::Gameplay)
+    {
+        if(auto* HUD=Cast<AVSMHUD>(GetHUD()))
+            if(auto* Widget=Cast<UVSMWidget>(HUD->RootWidget.Get()))Widget->ShowExitConfirmation(true);
+    }
+    else if(Screen==EVSMUIScreen::Dialogue || Screen==EVSMUIScreen::TicketCheck)Navigate(EVSMUIScreen::Gameplay);
+}
 void AVSMPlayerController::SetMenuOpen(bool bOpen)
 {
     bMenuOpen=bOpen;

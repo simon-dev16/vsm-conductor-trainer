@@ -28,7 +28,9 @@ public:
     UPROPERTY(BlueprintReadOnly, Category="VSM|Speech") bool bRecording=false;
     UPROPERTY(BlueprintReadOnly, Category="VSM|Speech") FString RecognizedText;
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SignIn(const FString& Login,const FString& Password,bool bRegister);
+    UFUNCTION(BlueprintCallable, Category="VSM|Shift") void SignOut();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void StartShift(bool bRanked,int32 SituationId=46);
+    UFUNCTION(BlueprintCallable, Category="VSM|Shift") void EndShiftForMenu();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RefreshShift();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RetryPending();
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void RecoverCurrentShift(bool bEnterGameplay=true);
@@ -42,6 +44,7 @@ public:
     UFUNCTION(BlueprintCallable, Category="VSM|Shift") void LoadLeaderboard(const FString& Scope=TEXT("company"));
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString Field(const FString& Path) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString TaskText() const;
+    UFUNCTION(BlueprintPure, Category="VSM|Shift") FString TaskIndicator(const FString& ActorId) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString InventoryText(int32 Slot) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString DocumentsText(const FString& Document) const;
     UFUNCTION(BlueprintPure, Category="VSM|Shift") FString ReportText() const;
@@ -67,6 +70,8 @@ private:
     FString Token;
     FString UserId;
     bool bEnterAfterRecovery=false;
+    bool bExitToMenu=false;
+    bool bCloseRecoveredShift=false;
     FString BaseUrl;
     FString ShiftId;
     FString TaskId;
