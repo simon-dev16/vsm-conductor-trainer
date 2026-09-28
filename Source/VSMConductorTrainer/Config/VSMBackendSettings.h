@@ -19,6 +19,7 @@ public:
     UPROPERTY(Config, EditAnywhere, Category="Development") bool bUseMockBackend = false;
     UPROPERTY(Config, EditAnywhere, Category="Development") bool bEnableVerboseNetworkLogs = false;
     UPROPERTY(Config, EditAnywhere, Category="Development") bool bAllowLoopbackHttp = false;
+    UPROPERTY(Config, EditAnywhere, Category="Development") bool bAllowLanHttp = false;
     UPROPERTY(Config, EditAnywhere, Category="Development") bool bEnableDevScreen = true;
     UPROPERTY(Config, EditAnywhere, Category="Auth") FString TokenSaveSlot = TEXT("VSMAuthToken");
     virtual FName GetCategoryName() const override { return TEXT("Game"); }

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root xmlns:android="http://schemas.android.com/apk/res/android">
+    <init>
+        <setBoolFromProperty result="bVSMAllowLanHttp" ini="Game" section="/Script/VSMConductorTrainer.VSMBackendSettings" property="bAllowLanHttp" default="false"/>
+    </init>
+    <androidManifestUpdates>
+        <if condition="bVSMAllowLanHttp">
+            <true>
+                <addAttribute tag="application" name="android:usesCleartextTraffic" value="true"/>
+            </true>
+        </if>
+    </androidManifestUpdates>
+</root>

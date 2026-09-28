@@ -92,6 +92,8 @@ void UVSMShiftSubsystem::Request(const FString& Method,const FString& Path,TShar
     bool bAllowed=bHttps;
 #if !UE_BUILD_SHIPPING
     bAllowed|=(BaseUrl.StartsWith(TEXT("http://127.0.0.1:")) || BaseUrl.StartsWith(TEXT("http://localhost:")));
+    if(const UVSMBackendSettings* Settings=GetDefault<UVSMBackendSettings>())
+        bAllowed|=Settings->bAllowLanHttp && BaseUrl.StartsWith(TEXT("http://"));
     bAllowed|=FParse::Param(FCommandLine::Get(),TEXT("VSMAllowLan")) && BaseUrl.StartsWith(TEXT("http://"));
 #endif
     if(!bAllowed){Message=FString::Printf(TEXT("Для сервера требуется HTTPS (адрес: %s)."),*BaseUrl);UE_LOG(LogVSMNetwork,Warning,TEXT("Rejected request: '%s' is neither HTTPS nor loopback"),*BaseUrl);OnChanged.Broadcast();return;}

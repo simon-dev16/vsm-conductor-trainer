@@ -8,7 +8,11 @@ public class VSMConductorTrainer : ModuleRules
         PublicIncludePaths.Add(ModuleDirectory);
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "DeveloperSettings", "UMG" });
         PrivateDependencyModuleNames.AddRange(new[] { "HTTP", "Json", "Slate", "SlateCore", "AudioCaptureCore", "LevelSequence", "MovieScene", "MovieSceneTracks", "AnimGraphRuntime" });
-        if (Target.Platform == UnrealTargetPlatform.Android) PrivateDependencyModuleNames.Add("AndroidPermission");
+        if (Target.Platform == UnrealTargetPlatform.Android)
+        {
+            PrivateDependencyModuleNames.Add("AndroidPermission");
+            AdditionalPropertiesForReceipt.Add("AndroidPlugin", System.IO.Path.Combine(ModuleDirectory, "Android", "LocalNetwork_UPL.xml"));
+        }
         if (Target.bBuildEditor) PrivateDependencyModuleNames.AddRange(new[] { "UnrealEd", "UMGEditor", "AnimGraph", "BlueprintGraph", "KismetCompiler" });
 
     }
